@@ -455,7 +455,13 @@ fun NormalMusic(navController: NavController) {
 
                     itemsIndexed(
                         list.value,
-                        key = { _, music -> music }
+                        // PRD FR-E-13: playlists may contain the same
+                        // song multiple times, so the YosMediaItem
+                        // alone is no longer unique. Composite key of
+                        // (index, uri) keeps each row distinguishable
+                        // while still letting Compose reuse subcompositions
+                        // when the list reorders without inserts.
+                        key = { index, music -> "$index:${music.uri}" }
                     ) { index, music ->
                         MusicList(
                             music
