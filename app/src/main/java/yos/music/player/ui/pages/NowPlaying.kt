@@ -66,6 +66,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderPositions
@@ -1347,8 +1348,15 @@ private fun NowPlayingOverflowSheet(
     if (!isOpen.value) return
 
     // Internal navigation. Defaults to [OverflowScreen.Menu]; resets each
-    // time the sheet is dismissed via the LaunchedEffect in onDone() below.
+    // time the sheet is dismissed.
     var screen by remember { mutableStateOf(OverflowScreen.Menu) }
+
+    // Skip the partially-expanded state so the sheet always settles at the
+    // height of its current content. The body swaps between screens of
+    // very different heights (Menu ~3 rows, SleepTimer ~9 rows); with the
+    // default partial state the sheet stays at the previously-settled
+    // height and clips the taller content's bottom corners off-screen.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val onDismiss: () -> Unit = {
         isOpen.value = false
@@ -1356,7 +1364,10 @@ private fun NowPlayingOverflowSheet(
         screen = OverflowScreen.Menu
     }
 
-    YosBottomSheetDialog(onDismissRequest = onDismiss) {
+    YosBottomSheetDialog(
+        bottomSheetState = sheetState,
+        onDismissRequest = onDismiss,
+    ) {
         when (screen) {
             OverflowScreen.Menu -> OverflowMenuBody(
                 song = song,
