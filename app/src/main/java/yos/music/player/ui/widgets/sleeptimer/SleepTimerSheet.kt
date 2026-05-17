@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -86,9 +87,18 @@ fun SleepTimerSheet(isOpen: MutableState<Boolean>) {
  * @param onDone called when the timer flow should terminate — either after
  *   the user starts/cancels a timer, or when the host should dismiss its
  *   containing sheet.
+ * @param onBack optional callback for hosts that embed the sleep timer
+ *   inside their own navigation stack (e.g. the NowPlaying overflow menu
+ *   passes a callback that returns to the overflow Menu screen). When
+ *   non-null, the Preset screen renders a back arrow before its title;
+ *   tapping it invokes [onBack]. The internal Custom and Fade sub-screens
+ *   pop back to Preset on their own (existing behavior).
  */
 @Composable
-fun SleepTimerContent(onDone: () -> Unit) {
+fun SleepTimerContent(
+    onDone: () -> Unit,
+    onBack: (() -> Unit)? = null,
+) {
     var screen by remember { mutableStateOf(Screen.Presets) }
 
     when (screen) {
@@ -96,6 +106,7 @@ fun SleepTimerContent(onDone: () -> Unit) {
             onPicked = { onDone() },
             onOpenCustom = { screen = Screen.Custom },
             onOpenFade = { screen = Screen.Fade },
+            onBack = onBack,
         )
         Screen.Custom -> CustomScreen(
             onCancel = { screen = Screen.Presets },
@@ -118,11 +129,12 @@ private fun PresetScreen(
     onPicked: () -> Unit,
     onOpenCustom: () -> Unit,
     onOpenFade: () -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     val timerState by SleepTimer.state
     val activeOption = (timerState as? SleepTimerState.Active)?.option
 
-    SheetTitle(text = stringResource(R.string.sleep_timer_title))
+    SheetTitle(text = stringResource(R.string.sleep_timer_title), onBack = onBack)
 
     // Active status row: only shown when a timer is running.
     if (timerState is SleepTimerState.Active) {
@@ -590,13 +602,44 @@ private fun FadeScreen(onBack: () -> Unit) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun SheetTitle(text: String) {
-    Text(
-        text = text,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(bottom = 12.dp),
-    )
+private fun SheetTitle(text: String, onBack: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (onBack != null) {
+            val context = LocalContext.current
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {
+                        Vibrator.click(context)
+                        onBack()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_back),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .alpha(0.6f),
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = text,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
 }
 
 @Composable

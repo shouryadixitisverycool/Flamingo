@@ -65,6 +65,7 @@ import androidx.compose.material.ripple
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Slider
@@ -1378,10 +1379,12 @@ private fun NowPlayingOverflowSheet(
             OverflowScreen.Playlist -> PlayListPickerContent(
                 songToAdd = song,
                 onDone = onDismiss,
+                onBack = { screen = OverflowScreen.Menu },
             )
 
             OverflowScreen.SleepTimer -> SleepTimerContent(
                 onDone = onDismiss,
+                onBack = { screen = OverflowScreen.Menu },
             )
         }
     }

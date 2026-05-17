@@ -111,12 +111,21 @@ fun PlayListPickerSheet(
  *   a successful add/create, or when the host should close the containing
  *   sheet entirely. The host decides what "done" means (e.g. dismiss the
  *   sheet, or return to a previous internal screen).
+ * @param onBack optional callback for hosts that embed the picker inside
+ *   their own navigation stack (e.g. the NowPlaying overflow menu wants
+ *   the picker's list view to offer a back arrow that returns to the
+ *   overflow menu). The picker manages its own internal List ↔ Create
+ *   navigation: a single back arrow is shown that either pops Create ➝
+ *   List, or — when in List with [onBack] non-null — invokes [onBack] so
+ *   the host can pop one level further. When [onBack] is null and the
+ *   picker is in its top-level List view, no back arrow is shown.
  * @param onCreated optional callback fired after a new playlist is created.
  */
 @Composable
 fun PlayListPickerContent(
     songToAdd: YosMediaItem?,
     onDone: () -> Unit,
+    onBack: (() -> Unit)? = null,
     onCreated: ((PlayList) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -177,20 +186,33 @@ fun PlayListPickerContent(
         }
     }
 
-    // Title bar: in create-only mode, no back arrow; in picker mode with
-    // create-mode toggled on, show a back arrow to return to the list.
+    // Back-arrow logic:
+    //   - In Create mode (with an existing list to return to), back pops
+    //     to the List view.
+    //   - In List mode, back invokes the host-provided [onBack] when given,
+    //     allowing the host to pop one level further (e.g. the NowPlaying
+    //     overflow menu returns to its Menu screen).
+    //   - In create-only mode (songToAdd == null and the picker opened
+    //     directly into Create), there is no internal List to return to,
+    //     so back falls through to [onBack] as well — or is hidden if
+    //     [onBack] is null.
+    val headerBack: (() -> Unit)? = when {
+        createMode && songToAdd != null -> {
+            {
+                createMode = false
+                newPlaylistName = ""
+                nameError = null
+            }
+        }
+        else -> onBack
+    }
     PickerHeader(
         title = if (createMode) {
             stringResource(R.string.playlist_picker_create_title)
         } else {
             stringResource(R.string.playlist_picker_title)
         },
-        showBack = createMode && songToAdd != null,
-        onBack = {
-            createMode = false
-            newPlaylistName = ""
-            nameError = null
-        },
+        onBack = headerBack,
     )
 
     Spacer(modifier = Modifier.height(8.dp))
@@ -257,8 +279,7 @@ fun PlayListPickerContent(
 @Composable
 private fun PickerHeader(
     title: String,
-    showBack: Boolean,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
@@ -266,7 +287,7 @@ private fun PickerHeader(
             .padding(bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showBack) {
+        if (onBack != null) {
             val context = LocalContext.current
             Box(
                 modifier = Modifier
@@ -282,13 +303,11 @@ private fun PickerHeader(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_action_next),
+                    painter = painterResource(id = R.drawable.ic_back),
                     contentDescription = null,
                     modifier = Modifier
                         .size(18.dp)
                         .alpha(0.6f),
-                    // Mirror the chevron horizontally so it points left ("back").
-                    // ic_action_next is right-pointing.
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
