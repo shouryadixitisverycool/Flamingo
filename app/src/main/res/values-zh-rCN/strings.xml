@@ -136,4 +136,23 @@
     <string name="playlist_picker_song_count_one">1 song</string>
     <string name="playlist_picker_song_count_other">%d songs</string>
     <string name="playlist_picker_already_added_cd">Already in this playlist</string>
+
+    <!-- TODO: translate. Sleep timer. -->
+    <string name="sleep_timer_title">Sleep Timer</string>
+    <string name="sleep_timer_off">Off</string>
+    <string name="sleep_timer_end_of_track">End of Track</string>
+    <string name="sleep_timer_end_of_queue">End of Album/Playlist</string>
+    <string name="sleep_timer_minutes">%d minutes</string>
+    <string name="sleep_timer_custom">Custom…</string>
+    <string name="sleep_timer_active_format">%1$s · %2$s remaining</string>
+    <string name="sleep_timer_active_short">Timer running</string>
+    <string name="sleep_timer_cancel">Cancel Timer</string>
+    <string name="sleep_timer_confirm">Start</string>
+    <string name="sleep_timer_fade_label">Fade out</string>
+    <string name="sleep_timer_fade_off">Off</string>
+    <string name="sleep_timer_fade_5s">5 seconds</string>
+    <string name="sleep_timer_fade_10s">10 seconds</string>
+    <string name="sleep_timer_fade_30s">30 seconds</string>
+    <string name="sleep_timer_custom_hours">Hours</string>
+    <string name="sleep_timer_custom_minutes">Minutes</string>
 </resources>

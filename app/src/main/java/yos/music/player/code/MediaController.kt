@@ -541,6 +541,14 @@ class YosPlaybackService : MediaSessionService() {
                         )
                     }
 
+                    // Sleep timer hook (PRD §5.6.2 FR-ST-6).
+                    // Fires EndOfTrack on every transition; fires EndOfQueue
+                    // only when the player has no successor.
+                    runCatching {
+                        val hasNext = player.hasNextMediaItem()
+                        SleepTimer.onMediaItemTransition(hasNext = hasNext)
+                    }
+
                     println("更新 $mediaItem")
                     super.onMediaItemTransition(mediaItem, reason)
                 }

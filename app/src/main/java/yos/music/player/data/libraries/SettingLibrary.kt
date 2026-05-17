@@ -251,4 +251,19 @@ object SettingsLibrary {
         key = "settings_library_enable_exclude_songs_under_one_minute",
         initialValue = true
     )
+
+    /**
+     * Sleep timer fade-out duration in milliseconds (PRD §5.6.4 FR-ST-9).
+     *
+     * Accepted UI values: 0 (no fade) / 5000 / 10000 / 30000.
+     * Default: 5000 ms (5-second fade) — matches the "polished" expectation
+     * for bedtime use without being so long the user wonders if the timer
+     * fired.
+     */
+    @Stable
+    var SleepTimerFadeDurationMs by mutableDataSaverStateOf(
+        dataSaverInterface = SettingsSaver,
+        key = "settings_sleep_timer_fade_duration_ms",
+        initialValue = 5000L,
+    )
 }
