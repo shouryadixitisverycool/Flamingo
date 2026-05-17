@@ -160,4 +160,40 @@
     <string name="now_playing_overflow_add_to_playlist">Add to a Playlist</string>
     <string name="now_playing_overflow_sleep_timer">Sleep Timer</string>
     <string name="now_playing_overflow_more_cd">More options</string>
+
+    <!-- TODO: translate. Playlist overhaul. -->
+    <string name="playlist_overflow_sort_by">Sort By</string>
+    <string name="playlist_overflow_edit">Edit Playlist</string>
+    <string name="playlist_overflow_pin">Pin Playlist</string>
+    <string name="playlist_overflow_unpin">Unpin Playlist</string>
+    <string name="playlist_overflow_add_to">Add to a Playlist…</string>
+    <string name="playlist_overflow_play_next">Play Next</string>
+    <string name="playlist_overflow_delete">Delete Playlist</string>
+    <string name="playlist_overflow_more_cd">More options</string>
+    <string name="playlist_sort_title">Sort By</string>
+    <string name="playlist_sort_manual">Manual Order</string>
+    <string name="playlist_sort_title_name">Title</string>
+    <string name="playlist_sort_artist">Artist</string>
+    <string name="playlist_sort_recently_added">Recently Added</string>
+    <string name="playlist_sort_ascending">Ascending</string>
+    <string name="playlist_sort_descending">Descending</string>
+    <string name="playlist_search_placeholder">Search in playlist</string>
+    <string name="playlist_search_clear_cd">Clear search</string>
+    <string name="playlist_edit_title">Edit Playlist</string>
+    <string name="playlist_edit_close_cd">Close</string>
+    <string name="playlist_edit_done_cd">Done</string>
+    <string name="playlist_edit_name_placeholder">Playlist name</string>
+    <string name="playlist_edit_description_placeholder">Add description</string>
+    <string name="playlist_edit_cover_custom_cd">Pick custom cover</string>
+    <string name="playlist_edit_cover_auto_cd">Auto cover</string>
+    <string name="playlist_edit_drag_handle_cd">Drag to reorder</string>
+    <string name="playlist_edit_remove_cd">Toggle remove</string>
+    <string name="playlist_play_next_toast_one">1 song added to Up Next</string>
+    <string name="playlist_play_next_toast_other">%d songs added to Up Next</string>
+    <string name="playlist_delete_undo_message">Deleted “%1$s”</string>
+    <string name="playlist_delete_undo_action">Undo</string>
+    <string name="playlist_pin_toast">Pinned “%1$s”</string>
+    <string name="playlist_unpin_toast">Unpinned “%1$s”</string>
+    <string name="playlist_pin_reorder_done">Done</string>
+    <string name="playlist_pin_reorder_hint">Drag to reorder pinned playlists</string>
 </resources>
