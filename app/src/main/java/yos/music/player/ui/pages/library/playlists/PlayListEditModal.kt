@@ -316,26 +316,32 @@ private fun EditPlaylistContent(
                         // Reindex staged positions so the user's
                         // pending removals continue to point at the
                         // intended songs after the reorder.
-                        staged.replaceAll { stagedIdx ->
+                        // List#replaceAll is API 24+ (minSdk 23);
+                        // emulate with a clear+addAll cycle.
+                        val remapped = staged.map { stagedIdx ->
                             when (stagedIdx) {
                                 index -> index - 1
                                 index - 1 -> index
                                 else -> stagedIdx
                             }
                         }
+                        staged.clear()
+                        staged.addAll(remapped)
                     }
                 } else null,
                 onMoveDown = if (index < workingSongs.lastIndex) {
                     {
                         val item = workingSongs.removeAt(index)
                         workingSongs.add(index + 1, item)
-                        staged.replaceAll { stagedIdx ->
+                        val remapped = staged.map { stagedIdx ->
                             when (stagedIdx) {
                                 index -> index + 1
                                 index + 1 -> index
                                 else -> stagedIdx
                             }
                         }
+                        staged.clear()
+                        staged.addAll(remapped)
                     }
                 } else null,
             )
