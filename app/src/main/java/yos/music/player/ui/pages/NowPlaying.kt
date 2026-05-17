@@ -16,6 +16,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -1289,8 +1290,15 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
         ) {
             AnimatedContent(
                 targetState = overflowSheetOpen.value,
+                // Match the Material3 ModalBottomSheet close animation
+                // (~300ms) so the icon de-highlights exactly as the sheet
+                // finishes sliding away. The default fadeIn/fadeOut uses a
+                // spring spec that's noticeably slower than the sheet,
+                // which leaves the icon visibly highlighted after the
+                // sheet has already closed.
                 transitionSpec = {
-                    fadeIn() togetherWith fadeOut()
+                    fadeIn(animationSpec = tween(durationMillis = 300)) togetherWith
+                        fadeOut(animationSpec = tween(durationMillis = 300))
                 }) {
                 if (it) {
                     Icon(
