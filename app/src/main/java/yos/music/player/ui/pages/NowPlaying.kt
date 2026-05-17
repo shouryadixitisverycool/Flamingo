@@ -1274,10 +1274,12 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
         Spacer(modifier = Modifier.width(14.dp))
 
         // No graphicsLayer rotation here: the underlying drawable
-        // (ic_nowplaying_more / _fill) is already drawn as a vertical
-        // three-dot ellipsis. Rotating the Box was rotating an already-
-        // vertical icon to horizontal and shifting the visible click
-        // target relative to the layout hitbox.
+        // (ic_nowplaying_more / _fill) is drawn natively as a horizontal
+        // three-dot ellipsis. A previous version applied a 90deg
+        // graphicsLayer rotation to a vertical drawable; the rotation
+        // changed the visible orientation but not the layout hitbox,
+        // shifting the tap target to the right of the icon. Both the
+        // drawable and hitbox are now horizontal and aligned.
         Box(
             modifier = Modifier
                 .clickable(
