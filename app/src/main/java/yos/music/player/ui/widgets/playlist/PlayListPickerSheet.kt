@@ -127,16 +127,33 @@ fun PlayListPickerContent(
     onDone: () -> Unit,
     onBack: (() -> Unit)? = null,
     onCreated: ((PlayList) -> Unit)? = null,
+    /**
+     * When non-null the picker enters **bulk mode**: the list of
+     * existing playlists is shown (just like single-song add), but
+     * tapping a row hands off to [onBulkAdd] instead of attaching
+     * [songToAdd] to it. The "Create New Playlist" row at the top
+     * still appears and routes through [onCreated]; the host is
+     * expected to fold the bulk insert into the onCreated handler.
+     *
+     * Used by the playlist detail page's "Add to a Playlist…"
+     * action (PRD FR-M-08) to copy every song from the source
+     * playlist into the selected target.
+     */
+    bulkAddSource: PlayList? = null,
+    onBulkAdd: ((PlayList) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val bulkMode = bulkAddSource != null
     // Local UI state: are we in "create new playlist" mode (text input
-    // visible) or the default list view?
-    var createMode by remember { mutableStateOf(songToAdd == null) }
+    // visible) or the default list view? Bulk mode lands in list view
+    // by default; the user can still tap "Create New Playlist" to make
+    // a fresh target.
+    var createMode by remember { mutableStateOf(songToAdd == null && !bulkMode) }
     var newPlaylistName by remember { mutableStateOf("") }
     var nameError by remember { mutableStateOf<String?>(null) }
 
     val resetTransient: () -> Unit = {
-        createMode = songToAdd == null
+        createMode = songToAdd == null && !bulkMode
         newPlaylistName = ""
         nameError = null
     }
@@ -187,17 +204,14 @@ fun PlayListPickerContent(
     }
 
     // Back-arrow logic:
-    //   - In Create mode (with an existing list to return to), back pops
-    //     to the List view.
-    //   - In List mode, back invokes the host-provided [onBack] when given,
-    //     allowing the host to pop one level further (e.g. the NowPlaying
-    //     overflow menu returns to its Menu screen).
-    //   - In create-only mode (songToAdd == null and the picker opened
-    //     directly into Create), there is no internal List to return to,
-    //     so back falls through to [onBack] as well — or is hidden if
-    //     [onBack] is null.
+    //   - In Create mode entered from the list view, back pops to List.
+    //   - In List mode, back invokes the host-provided [onBack] when
+    //     given so the host can pop one level further.
+    //   - In create-only mode (no songToAdd, no bulk source), there is
+    //     no internal List to return to, so back falls through to
+    //     [onBack] — or is hidden if [onBack] is null.
     val headerBack: (() -> Unit)? = when {
-        createMode && songToAdd != null -> {
+        createMode && (songToAdd != null || bulkMode) -> {
             {
                 createMode = false
                 newPlaylistName = ""
@@ -226,7 +240,7 @@ fun PlayListPickerContent(
             },
             errorMessage = nameError,
             onConfirm = confirmCreate,
-            onCancel = if (songToAdd == null) finish else {
+            onCancel = if (songToAdd == null && !bulkMode) finish else {
                 {
                     createMode = false
                     newPlaylistName = ""
@@ -247,22 +261,28 @@ fun PlayListPickerContent(
         Divider()
 
         ExistingPlayListList(
-            songToAdd = songToAdd!!,
+            songToAdd = songToAdd,
+            excludeId = bulkAddSource?.listID,
             onAdd = { playlist ->
-                // PRD FR-E-13: duplicates are allowed across the app.
-                // The picker no longer dedupes — adding the same song
-                // twice produces two distinct entries. The trailing
-                // checkmark in the row still signals "already in" for
-                // user awareness.
-                playlist.addMusic(songToAdd)
-                Toast.makeText(
-                    context,
-                    context.getString(
-                        R.string.playlist_picker_added_toast,
-                        playlist.name,
-                    ),
-                    Toast.LENGTH_SHORT,
-                ).show()
+                if (bulkMode) {
+                    // PRD FR-M-08: hand off to the host. The host
+                    // performs the bulk insert; the picker just
+                    // closes once the tap is consumed.
+                    onBulkAdd?.invoke(playlist)
+                } else if (songToAdd != null) {
+                    // PRD FR-E-13: duplicates are allowed across the
+                    // app. The picker no longer dedupes — adding the
+                    // same song twice produces two distinct entries.
+                    playlist.addMusic(songToAdd)
+                    Toast.makeText(
+                        context,
+                        context.getString(
+                            R.string.playlist_picker_added_toast,
+                            playlist.name,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
                 finish()
             },
         )
@@ -464,10 +484,13 @@ private fun CreateNewRow(onClick: () -> Unit) {
 
 @Composable
 private fun ExistingPlayListList(
-    songToAdd: YosMediaItem,
+    songToAdd: YosMediaItem?,
+    excludeId: String?,
     onAdd: (PlayList) -> Unit,
 ) {
-    val playlists = remember(playList) { playList.sortedBy { it.name } }
+    val playlists = remember(playList, excludeId) {
+        playList.filter { it.listID != excludeId }.sortedBy { it.name }
+    }
 
     if (playlists.isEmpty()) {
         Box(
@@ -499,7 +522,7 @@ private fun ExistingPlayListList(
         ) { _, playlist ->
             ExistingPlayListRow(
                 playlist = playlist,
-                isAlreadyIn = playlist.songDataList.contains(songToAdd.uri),
+                isAlreadyIn = songToAdd != null && playlist.songDataList.contains(songToAdd.uri),
                 onClick = { onAdd(playlist) },
             )
         }

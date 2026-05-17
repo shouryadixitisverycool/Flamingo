@@ -357,15 +357,17 @@ private fun PlayListSortBody(onBack: () -> Unit) {
 }
 
 /**
- * PRD FR-M-08: "Add to a Playlist…" on a playlist bulk-creates a copy
- * by reusing the shared picker in create-only mode. The picker's
- * onCreated fires when a fresh target is made; we then attach every
- * source song to it on a background dispatcher.
+ * PRD FR-M-08: "Add to a Playlist…" on a playlist hands off to the
+ * shared picker in **bulk mode**. The list view shows existing
+ * playlists (minus the source itself) plus a "Create New Playlist"
+ * row at the top. Selecting any target bulk-copies every song from
+ * the source playlist into it; creating a new one does the same
+ * once the playlist exists.
  *
- * Adding into an existing target playlist is out of scope for this
- * release (PRD §10 OQ-1) — the existing picker doesn't expose that
- * hook for bulk inserts, and the per-song "Add to a Playlist" flow
- * already covers it.
+ * Why one helper instead of two flows: re-using the same picker
+ * surface keeps the look identical to the NowPlaying per-song
+ * picker. The PRD called the per-song picker "the picker we've
+ * made we'll reuse it" — this completes that reuse for bulk.
  */
 @Composable
 private fun BulkAddToPlaylistBody(
@@ -375,28 +377,40 @@ private fun BulkAddToPlaylistBody(
 ) {
     val context = LocalContext.current
 
+    // Single helper used for both "tap existing" and "tap created"
+    // paths so the bulk-insert behaviour is identical regardless of
+    // where the target came from.
+    val performBulkAdd: (PlayList) -> Unit = { target ->
+        val urisToAdd = source.songDataList
+        MainScope().launch(Dispatchers.IO) {
+            urisToAdd.forEach { uri ->
+                // Re-read the live record on every iteration so the
+                // copy + replace cycle inside addMusic doesn't
+                // overwrite earlier inserts (each addMusic builds a
+                // copy and writes back to playList, so subsequent
+                // calls need to see the latest snapshot).
+                val live = playList.firstOrNull { it.listID == target.listID }
+                    ?: return@forEach
+                val stub = uriStubMedia(uri)
+                PlayListLibrary.run { live.addMusic(stub) }
+            }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.playlist_picker_added_toast, target.name),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
+
     PlayListPickerContent(
         songToAdd = null,
         onDone = onDone,
         onBack = onBack,
-        onCreated = { created ->
-            val urisToAdd = source.songDataList
-            MainScope().launch(Dispatchers.IO) {
-                urisToAdd.forEach { uri ->
-                    val targetNow = playList.firstOrNull { it.listID == created.listID }
-                        ?: return@forEach
-                    val stub = uriStubMedia(uri)
-                    PlayListLibrary.run { targetNow.addMusic(stub) }
-                }
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.playlist_picker_added_toast, created.name),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-            }
-        },
+        bulkAddSource = source,
+        onBulkAdd = performBulkAdd,
+        onCreated = { created -> performBulkAdd(created) },
     )
 }
 
