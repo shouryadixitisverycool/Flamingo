@@ -111,6 +111,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastMap
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.Player.REPEAT_MODE_ALL
@@ -1388,11 +1389,16 @@ fun RowScope.AirPlay() {
                     }
                 }
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                contextCompose.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                contextCompose.registerReceiver(receiver, filter)
-            }
+            // Use ContextCompat to handle the Android-14+ requirement that
+            // registerReceiver carry an explicit export flag, transparently
+            // on older API levels. Mirrors the existing TIRAMISU branch's
+            // RECEIVER_EXPORTED choice to preserve behavior.
+            ContextCompat.registerReceiver(
+                contextCompose,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_EXPORTED,
+            )
 
             if (ActivityCompat.checkSelfPermission(
                     contextCompose,
