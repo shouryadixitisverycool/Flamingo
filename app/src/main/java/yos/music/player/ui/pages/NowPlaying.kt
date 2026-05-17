@@ -1267,12 +1267,13 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
 
         Spacer(modifier = Modifier.width(14.dp))
 
+        // No graphicsLayer rotation here: the underlying drawable
+        // (ic_nowplaying_more / _fill) is already drawn as a vertical
+        // three-dot ellipsis. Rotating the Box was rotating an already-
+        // vertical icon to horizontal and shifting the visible click
+        // target relative to the layout hitbox.
         Box(
             modifier = Modifier
-                .graphicsLayer {
-                    rotationZ = 90f
-                    compositingStrategy = CompositingStrategy.ModulateAlpha
-                }
                 .clickable(
                     onClick = {
                         // Snapshot the currently-playing song at open time
