@@ -63,6 +63,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ripple
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -156,7 +157,15 @@ import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.widgets.YosLyricView
 import yos.music.player.ui.widgets.effects.YosFloatingLight
 import yos.music.player.ui.widgets.audio.MusicQualityIndicator
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import yos.music.player.ui.widgets.basic.ActionItem
+import yos.music.player.ui.widgets.basic.ActionSheet
 import yos.music.player.ui.widgets.basic.ImageQuality
+import yos.music.player.ui.widgets.playlist.PlayListPickerSheet
+import yos.music.player.ui.widgets.sleeptimer.SleepTimerSheet
+import yos.music.player.code.SleepTimer
+import yos.music.player.code.SleepTimerState
 import yos.music.player.ui.widgets.basic.ShadowImageWithCache
 import yos.music.player.ui.widgets.basic.YosWrapper
 import yos.music.player.ui.widgets.effects.ShadowType
@@ -1195,6 +1204,18 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
 
         val context = LocalContext.current
 
+        // Overflow menu state. The sheet renders only when this is true; the icon
+        // swaps to its filled variant while open (PRD §5.1 FR-OM-2).
+        val overflowSheetOpen = remember { mutableStateOf(false) }
+        // Snapshot of the song that was playing when the sheet was opened
+        // (PRD §5.3 FR-OM-8). All actions in the sheet refer to this item.
+        val snapshotSong = remember { mutableStateOf<YosMediaItem?>(null) }
+
+        NowPlayingOverflowSheet(
+            isOpen = overflowSheetOpen,
+            song = snapshotSong.value,
+        )
+
         Box(
             modifier = Modifier
                 .clickable(
@@ -1254,7 +1275,11 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
                 }
                 .clickable(
                     onClick = {
-
+                        // Snapshot the currently-playing song at open time
+                        // (PRD FR-OM-8) and surface the sheet. The sheet wrapper
+                        // handles its own haptic on open.
+                        snapshotSong.value = musicPlayingLambda()
+                        overflowSheetOpen.value = true
                     },
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() })
@@ -1262,7 +1287,7 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
             contentAlignment = Alignment.Center
         ) {
             AnimatedContent(
-                targetState = false,
+                targetState = overflowSheetOpen.value,
                 transitionSpec = {
                     fadeIn() togetherWith fadeOut()
                 }) {
@@ -1282,6 +1307,144 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
                             .size(dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Now Playing overflow menu. Opened from the three-dots icon in [ActionButtonsRow].
+ *
+ * Per PRD §5.3 FR-OM-8 this composable receives a *snapshot* of the song that
+ * was playing when the sheet was opened — it does not re-subscribe to
+ * [MediaController.musicPlaying] for the header, so subsequent track changes
+ * while the sheet is open do not mutate the displayed song.
+ *
+ * Stub rows (Add to Playlist, Sleep Timer) are wired in later steps.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NowPlayingOverflowSheet(
+    isOpen: MutableState<Boolean>,
+    song: YosMediaItem?,
+) {
+    // Sub-sheets: opened from rows in this overflow menu.
+    val playlistPickerOpen = remember { mutableStateOf(false) }
+    val sleepTimerOpen = remember { mutableStateOf(false) }
+
+    val addToPlaylistLabel = stringResource(R.string.now_playing_overflow_add_to_playlist)
+    val sleepTimerLabel = stringResource(R.string.now_playing_overflow_sleep_timer)
+
+    // PRD FR-OM-13: highlight the Sleep Timer row when a timer is running.
+    // No subtitle is shown — only the tint changes.
+    val sleepTimerActive = SleepTimer.state.value is SleepTimerState.Active
+    val accent = MaterialTheme.colorScheme.primary
+
+    val items = remember(
+        song, addToPlaylistLabel, sleepTimerLabel, sleepTimerActive, accent,
+    ) {
+        listOf(
+            ActionItem(
+                iconRes = R.drawable.ic_action_add,
+                label = addToPlaylistLabel,
+                onClick = {
+                    // Dismiss the overflow sheet, then open the playlist picker.
+                    // The snapshotted song flows into the picker via [song].
+                    isOpen.value = false
+                    playlistPickerOpen.value = true
+                },
+            ),
+            ActionItem(
+                iconRes = R.drawable.ic_setting_moon,
+                label = sleepTimerLabel,
+                tint = if (sleepTimerActive) accent else null,
+                onClick = {
+                    isOpen.value = false
+                    sleepTimerOpen.value = true
+                },
+            ),
+        )
+    }
+
+    ActionSheet(
+        isOpen = isOpen,
+        header = if (song != null) {
+            { NowPlayingOverflowHeader(song = song) }
+        } else null,
+        items = items,
+    )
+
+    // Playlist picker — opened from the row above. Receives the snapshot song.
+    PlayListPickerSheet(
+        isOpen = playlistPickerOpen,
+        songToAdd = song,
+    )
+
+    // Sleep timer sheet — controls SleepTimer singleton state directly.
+    SleepTimerSheet(isOpen = sleepTimerOpen)
+}
+
+/**
+ * Header row for the Now Playing overflow sheet.
+ *
+ * 64dp rounded album thumbnail + three lines (title bold, artist, album).
+ * Receives a snapshot [song] — content does NOT update if the playing track
+ * changes while the sheet is open (PRD §5.3 FR-OM-8).
+ */
+@Composable
+private fun NowPlayingOverflowHeader(song: YosMediaItem) {
+    val context = LocalContext.current
+    val shape = YosRoundedCornerShape(8.dp)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(song.thumb)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            modifier = Modifier
+                .size(64.dp)
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                    clip = true
+                    this.shape = shape
+                },
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = song.title.orEmpty(),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!song.artists.isNullOrBlank()) {
+                Text(
+                    text = song.artists,
+                    fontSize = 13.5.sp,
+                    modifier = Modifier
+                        .padding(top = 3.dp)
+                        .alpha(0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (!song.album.isNullOrBlank()) {
+                Text(
+                    text = song.album,
+                    fontSize = 12.5.sp,
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .alpha(0.5f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

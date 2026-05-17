@@ -155,4 +155,9 @@
     <string name="sleep_timer_fade_30s">30 seconds</string>
     <string name="sleep_timer_custom_hours">Hours</string>
     <string name="sleep_timer_custom_minutes">Minutes</string>
+
+    <!-- TODO: translate. NowPlaying overflow menu. -->
+    <string name="now_playing_overflow_add_to_playlist">Add to a Playlist</string>
+    <string name="now_playing_overflow_sleep_timer">Sleep Timer</string>
+    <string name="now_playing_overflow_more_cd">More options</string>
 </resources>
