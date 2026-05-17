@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -83,6 +84,7 @@ import yos.music.player.data.libraries.defaultArtists
 import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.pages.library.albums.NormalButton
+import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
 import yos.music.player.ui.pages.library.playlists.PlayListEditModal
 import yos.music.player.ui.pages.library.playlists.PlayListOverflowSheet
@@ -210,16 +212,19 @@ fun NormalMusic(navController: NavController) {
             val overflowSheetOpen = remember { mutableStateOf(false) }
             val editModalOpen = remember { mutableStateOf(false) }
 
-            // PRD §5.1 FR-S-01/02: pull-to-reveal search. The search
-            // field is the first list item; on first composition we
-            // jump past it (so it's hidden) and rely on the existing
-            // overscroll machinery to reveal it on a pull-down.
+            // PRD §5.1 FR-S-01/02: pull-to-reveal search. The
+            // playlist item ordering is:
+            //   0: title (Title widget's big-text header)
+            //   1: SearchField  ← hidden above the viewport on entry
+            //   2: PlayListHeader (cover + description)
+            //   3: Options (Play / Shuffle row)
+            //   4..: songs
+            // scrollToItem(2) lifts the cover header to the top,
+            // pushing the title text and search field above the
+            // viewport. The user pulls down to reveal them.
             val playlistListState = if (activePlayList != null) rememberLazyListState() else null
             if (activePlayList != null && playlistListState != null) {
                 LaunchedEffect(activePlayList.listID) {
-                    // Hide the search field on entry. Item index 1
-                    // is the search field (item 0 is the Title's own
-                    // big-title header).
                     playlistListState.scrollToItem(2)
                 }
             }
@@ -367,6 +372,17 @@ fun NormalMusic(navController: NavController) {
                                     )
                                 }
                             }
+                        }
+                    }
+                    if (activePlayList != null) {
+                        // PRD §5.3 follow-up: cover + description are
+                        // the playlist's identity on the detail page.
+                        // Rendered between the (hidden) search field
+                        // and the Play/Shuffle buttons; visible by
+                        // default thanks to scrollToItem(2) anchoring
+                        // it at the top.
+                        item("PlayListHeader") {
+                            PlayListDetailHeader(playList = activePlayList)
                         }
                     }
                     item("Options") {
@@ -681,3 +697,83 @@ fun FloatingMenuDivider() =
     Spacer(
         modifier = Modifier.height(8.dp)
     )
+
+/**
+ * Playlist detail page header: large rounded cover + (optional)
+ * description. Mirrors the Apple Music reference (big square cover
+ * centered; description shown beneath when present).
+ *
+ * Cover resolution order (PRD FR-E-03, FR-E-05):
+ *   1. The custom photo URI the user picked in Edit Playlist.
+ *   2. A 2×2 auto-collage of the first 4 unique album arts.
+ *   3. The default star placeholder when the playlist is empty.
+ */
+@Composable
+private fun PlayListDetailHeader(playList: PlayList) {
+    val context = LocalContext.current
+    val shape = YosRoundedCornerShape(16.dp)
+
+    // Resolve the playlist's songs to YosMediaItem for the
+    // auto-collage path; only needed when no custom cover is set.
+    val songsInPlaylist = remember(playList.songDataList) {
+        playList.songDataList.mapNotNull { uri ->
+            yos.music.player.data.libraries.MusicLibrary.songs.firstOrNull { it.uri == uri }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = 8.dp, bottom = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(260.dp)
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                    clip = true
+                    this.shape = shape
+                },
+        ) {
+            when {
+                !playList.coverUri.isNullOrBlank() -> {
+                    coil.compose.AsyncImage(
+                        model = coil.request.ImageRequest.Builder(context)
+                            .data(playList.coverUri)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                songsInPlaylist.isEmpty() -> {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(id = R.drawable.placeholder_playlist_default),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                else -> {
+                    yos.music.player.ui.pages.library.playlists.PlayListAutoCover(
+                        songs = songsInPlaylist,
+                    )
+                }
+            }
+        }
+
+        if (!playList.description.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = playList.description,
+                fontSize = 14.5.sp,
+                lineHeight = 19.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(0.7f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+    }
+}

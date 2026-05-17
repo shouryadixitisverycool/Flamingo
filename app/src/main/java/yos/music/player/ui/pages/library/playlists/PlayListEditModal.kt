@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -415,6 +416,10 @@ private fun EditHeader(onClose: () -> Unit, onDone: () -> Unit) {
  * selection if a custom URI is set). Slot 2 is the 2×2 auto-collage
  * built from the playlist's first 4 unique album arts. PRD FR-E-03,
  * FR-E-05.
+ *
+ * Selection is signalled by a 2dp accent-colored border around the
+ * active slot; the other slot uses a faint dim ring to read as
+ * "tappable but not selected."
  */
 @Composable
 private fun CoverCarousel(
@@ -424,8 +429,7 @@ private fun CoverCarousel(
     onChooseAuto: () -> Unit,
 ) {
     val context = LocalContext.current
-    val shape = YosRoundedCornerShape(12.dp)
-    val density = LocalDensity.current
+    val customSelected = coverUri != null
     val autoSelected = coverUri == null
 
     Row(
@@ -435,20 +439,10 @@ private fun CoverCarousel(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Slot 1: custom photo.
-        Box(
-            modifier = Modifier
-                .size(160.dp)
-                .clip(shape)
-                .background((Color.LightGray withNight Color.DarkGray).copy(alpha = 0.35f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    Vibrator.click(context)
-                    onPickCustom()
-                },
-            contentAlignment = Alignment.Center,
+        // Slot 1: custom photo picker.
+        CarouselSlot(
+            selected = customSelected,
+            onClick = onPickCustom,
         ) {
             if (coverUri != null) {
                 AsyncImage(
@@ -460,139 +454,91 @@ private fun CoverCarousel(
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_action_camera),
-                    contentDescription = stringResource(R.string.playlist_edit_cover_custom_cd),
-                    tint = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.size(36.dp),
-                )
-            }
-            // Selection ring when this is the active slot.
-            if (coverUri != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            compositingStrategy = CompositingStrategy.Offscreen
-                            this.shape = shape
-                            clip = true
-                        },
-                )
+                        .background((Color.LightGray withNight Color.DarkGray).copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_action_camera),
+                        contentDescription = stringResource(R.string.playlist_edit_cover_custom_cd),
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(36.dp),
+                    )
+                }
             }
         }
         // Slot 2: auto-collage.
+        CarouselSlot(
+            selected = autoSelected,
+            onClick = onChooseAuto,
+        ) {
+            PlayListAutoCover(songs = resolvedSongs)
+        }
+    }
+}
+
+@Composable
+private fun CarouselSlot(
+    selected: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val context = LocalContext.current
+    val shape = YosRoundedCornerShape(12.dp)
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary
+        else (Color.LightGray withNight Color.DarkGray).copy(alpha = 0.35f)
+    val borderWidth = if (selected) 3.dp else 1.dp
+
+    Box(
+        modifier = Modifier
+            .size(160.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {
+                Vibrator.click(context)
+                onClick()
+            },
+    ) {
         Box(
             modifier = Modifier
-                .size(160.dp)
-                .clip(shape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    Vibrator.click(context)
-                    onChooseAuto()
+                .fillMaxSize()
+                .graphicsLayer {
+                    compositingStrategy = CompositingStrategy.Offscreen
+                    clip = true
+                    this.shape = shape
                 },
-            contentAlignment = Alignment.Center,
         ) {
-            AutoCollage(resolvedSongs = resolvedSongs)
-            if (autoSelected) {
-                // Selection outline via a translucent overlay ring.
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.0f)),
-                )
-            }
+            content()
+        }
+        // Border drawn as an overlay so it sits ABOVE clipped content
+        // without being clipped itself.
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val outline = shape.createOutline(
+                androidx.compose.ui.geometry.Size(size.width, size.height),
+                androidx.compose.ui.unit.LayoutDirection.Ltr,
+                this,
+            )
+            drawOutline(
+                outline = outline,
+                color = borderColor,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = borderWidth.toPx(),
+                ),
+            )
         }
     }
 }
 
 /**
- * 2×2 collage of the first 4 unique album arts (FR-E-05). Fallbacks:
- *   3 unique → 1×3 strip stacked horizontally (rendered as 2×2 with
- *     one cell duplicated to fill).
- *   2 unique → 1×2 split.
- *   1 unique → single-art fill.
- *   0 → default placeholder.
+ * Edit-modal alias for the shared playlist cover collage. See
+ * [PlayListAutoCover] for the layout matrix and fallbacks.
  */
 @Composable
 private fun AutoCollage(resolvedSongs: List<YosMediaItem>) {
-    val context = LocalContext.current
-    val thumbs = remember(resolvedSongs) {
-        resolvedSongs.mapNotNull { it.thumb }.distinct().take(4)
-    }
-    if (thumbs.isEmpty()) {
-        Image(
-            painter = painterResource(id = R.drawable.placeholder_playlist_default),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
-    }
-    when (thumbs.size) {
-        1 -> AsyncImage(
-            model = ImageRequest.Builder(context).data(thumbs[0]).crossfade(true).build(),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-        )
-        2 -> Row(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(thumbs[0]).build(),
-                contentDescription = null,
-                modifier = Modifier.weight(1f).fillMaxSize(),
-            )
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(thumbs[1]).build(),
-                contentDescription = null,
-                modifier = Modifier.weight(1f).fillMaxSize(),
-            )
-        }
-        3 -> Column(modifier = Modifier.fillMaxSize()) {
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(thumbs[0]).build(),
-                    contentDescription = null,
-                    modifier = Modifier.weight(1f).fillMaxSize(),
-                )
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(thumbs[1]).build(),
-                    contentDescription = null,
-                    modifier = Modifier.weight(1f).fillMaxSize(),
-                )
-            }
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(thumbs[2]).build(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-        }
-        else -> Column(modifier = Modifier.fillMaxSize()) {
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(thumbs[0]).build(),
-                    contentDescription = null,
-                    modifier = Modifier.weight(1f).fillMaxSize(),
-                )
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(thumbs[1]).build(),
-                    contentDescription = null,
-                    modifier = Modifier.weight(1f).fillMaxSize(),
-                )
-            }
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(thumbs[2]).build(),
-                    contentDescription = null,
-                    modifier = Modifier.weight(1f).fillMaxSize(),
-                )
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(thumbs[3]).build(),
-                    contentDescription = null,
-                    modifier = Modifier.weight(1f).fillMaxSize(),
-                )
-            }
-        }
-    }
+    PlayListAutoCover(songs = resolvedSongs)
 }
 
 @Composable

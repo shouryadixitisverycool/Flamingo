@@ -493,10 +493,18 @@ private fun LazyItemScope.PinnedAwarePlayListItem(
             .padding(start = 22.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Resolve the playlist's URIs to YosMediaItem for the
+        // auto-collage fallback. Cheap — same lookup performed each
+        // time the row recomposes; with a few hundred songs in the
+        // library this is sub-millisecond.
+        val songsInPlaylist = androidx.compose.runtime.remember(playList.songDataList) {
+            playList.songDataList.mapNotNull { uri ->
+                yos.music.player.data.libraries.MusicLibrary.songs.firstOrNull { it.uri == uri }
+            }
+        }
+        val coverContext = LocalContext.current
         Box(modifier = Modifier.size(64.dp)) {
-            Image(
-                painter = painterResource(id = R.drawable.placeholder_playlist_default),
-                contentDescription = null,
+            Box(
                 modifier = Modifier
                     .size(64.dp)
                     .graphicsLayer {
@@ -525,7 +533,30 @@ private fun LazyItemScope.PinnedAwarePlayListItem(
                             )
                         }
                     },
-            )
+            ) {
+                when {
+                    !playList.coverUri.isNullOrBlank() -> {
+                        coil.compose.AsyncImage(
+                            model = coil.request.ImageRequest.Builder(coverContext)
+                                .data(playList.coverUri)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    songsInPlaylist.isEmpty() -> {
+                        Image(
+                            painter = painterResource(id = R.drawable.placeholder_playlist_default),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    else -> {
+                        PlayListAutoCover(songs = songsInPlaylist)
+                    }
+                }
+            }
             if (isPinned) {
                 Box(
                     modifier = Modifier

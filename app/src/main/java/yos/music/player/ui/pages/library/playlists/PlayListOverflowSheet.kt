@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -227,17 +228,24 @@ private fun OverflowMenuBody(
 /**
  * Header row matching the NowPlaying overflow sheet conventions: 64dp
  * rounded cover + name + (optional) description as subtitle. PRD FR-M-02.
+ *
+ * Cover resolution mirrors the detail page header: custom photo →
+ * auto-collage → default star placeholder.
  */
 @Composable
 private fun PlayListOverflowHeader(playList: PlayList) {
+    val context = LocalContext.current
     val shape = YosRoundedCornerShape(8.dp)
+    val songsInPlaylist = androidx.compose.runtime.remember(playList.songDataList) {
+        playList.songDataList.mapNotNull { uri ->
+            yos.music.player.data.libraries.MusicLibrary.songs.firstOrNull { it.uri == uri }
+        }
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.placeholder_playlist_default),
-            contentDescription = null,
+        androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .size(64.dp)
                 .graphicsLayer {
@@ -245,7 +253,30 @@ private fun PlayListOverflowHeader(playList: PlayList) {
                     clip = true
                     this.shape = shape
                 },
-        )
+        ) {
+            when {
+                !playList.coverUri.isNullOrBlank() -> {
+                    coil.compose.AsyncImage(
+                        model = coil.request.ImageRequest.Builder(context)
+                            .data(playList.coverUri)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                songsInPlaylist.isEmpty() -> {
+                    Image(
+                        painter = painterResource(id = R.drawable.placeholder_playlist_default),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                else -> {
+                    PlayListAutoCover(songs = songsInPlaylist)
+                }
+            }
+        }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.padding(end = 8.dp)) {
             Text(
