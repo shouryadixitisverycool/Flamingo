@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,13 +13,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +40,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -47,9 +55,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import yos.music.player.R
+import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.FavPlayListLibrary
 import yos.music.player.data.libraries.MusicLibrary.songs
 import yos.music.player.data.libraries.PlayList
+import yos.music.player.data.libraries.PlayListLibrary
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.objects.LibraryObject
@@ -58,13 +68,43 @@ import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
 import yos.music.player.ui.toUI
 import yos.music.player.ui.widgets.basic.Title
+import yos.music.player.ui.widgets.basic.TitleBarIcon
 import yos.music.player.ui.widgets.playlist.PlayListPickerSheet
 
 @Composable
 fun PlayLists(navController: NavController) {
-    val playLists = playList.sortedBy { it.name }
+    // PRD §5.4: pinned playlists float to the top in pinOrder asc;
+    // unpinned tail keeps the existing alpha-by-name order.
+    val playLists = playList
+    val pinned = playLists.filter { it.isPinned }
+        .sortedBy { it.pinOrder ?: Int.MAX_VALUE }
+    val unpinned = playLists.filter { !it.isPinned }.sortedBy { it.name }
+    val orderedAll = pinned + unpinned
+
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // PRD FR-P-08: long-press → drag-reorder pins. Held at the page
+    // scope so a Done tap (or back press) can commit / cancel.
+    val reorder = remember { PinReorderState() }
+    val rowHeightPx = with(LocalDensity.current) { 80.dp.toPx() }
+
+    // FR-M-10 hook: surface the undo snackbar when arriving with a
+    // pending deletion.
+    val pendingDelete = PendingPlayListDeletion.current
+    val snackbarMessage = remember { mutableStateOf<String?>(null) }
+    val undoMessageFmt = stringResource(R.string.playlist_delete_undo_message)
+    val undoActionLabel = stringResource(R.string.playlist_delete_undo_action)
+    LaunchedEffect(pendingDelete?.playList?.listID) {
+        val p = pendingDelete ?: return@LaunchedEffect
+        snackbarMessage.value = undoMessageFmt.format(p.playList.name)
+        // 5s window; if the user doesn't tap Undo, drop the stash.
+        kotlinx.coroutines.delay(5000)
+        if (PendingPlayListDeletion.current === p) {
+            PendingPlayListDeletion.consume()
+            snackbarMessage.value = null
+        }
+    }
 
     // PRD §5.5 FR-AP-5: this page's "Add" row opens the same reusable picker
     // used by the NowPlaying overflow menu, in create-only mode (no song to
@@ -77,84 +117,148 @@ fun PlayLists(navController: NavController) {
         songToAdd = null,
     )
 
-    Title(title = stringResource(id = R.string.page_library_playlists),
-        onBack = {
-            navController.popBackStack()
-        },
-        content = {
-            item("AddList") {
-                val targetTitle = context.getString(R.string.page_library_playlists_add_title)
-                PlayListItem(playListType = PlayListType.Add, title = targetTitle) {
-                    createPickerOpen.value = true
-                }
-
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 102.dp)
-                        .alpha(0.15f)
-                        .height(0.5.dp)
-                        .background(Color.Black withNight Color.White)
-                )
-            }
-
-            item("FavList") {
-                val targetTitle = context.getString(R.string.page_library_playlists_fav_title)
-                PlayListItem(playListType = PlayListType.Favorite, title = targetTitle) {
-                    scope.launch(Dispatchers.IO) {
-                        val targetList = FavPlayListLibrary.favPlayList
-                        LibraryObject.setTargetListWithTitle(targetTitle, targetList)
-                        withContext(Dispatchers.Main) {
-                            navController.toUI(UI.NormalMusic)
-                        }
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 102.dp)
-                        .alpha(0.15f)
-                        .height(0.5.dp)
-                        .background(Color.Black withNight Color.White)
-                )
-            }
-
-            itemsIndexed(
-                playLists,
-                key = { _, playList -> playList.listID }
-            ) { index, playList ->
-                PlayListItem(playList = playList) {
-                    scope.launch(Dispatchers.IO) {
-                        val targetTitle = playList.name
-                        val targetList = convertToSongList(playList.songDataList, songs)
-                        // PRD §5.2: thread playlist ID through so the
-                        // detail page can surface playlist-only actions.
-                        LibraryObject.setTargetListWithTitle(
-                            targetTitle,
-                            targetList,
-                            playListId = playList.listID,
-                        )
-                        withContext(Dispatchers.Main) {
-                            navController.toUI(UI.NormalMusic)
-                        }
-                    }
-                }
-                key(index) {
-                    val needDivider = index < playLists.size - 1
-                    if (needDivider) {
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 102.dp)
-                                .alpha(0.15f)
-                                .height(0.5.dp)
-                                .background(Color.Black withNight Color.White)
-                        )
-                    }
-                }
-            }
+    // Effective rendering order: while reorder mode is active, the
+    // pinned section follows the live working order from
+    // [PinReorderState] so the user sees their drag take effect
+    // immediately. Otherwise it follows the persisted pinOrder.
+    val effectiveOrder = remember(pinned, unpinned, reorder.active, reorder.workingOrder.toList()) {
+        if (reorder.active) {
+            val pinById = pinned.associateBy { it.listID }
+            val orderedPinned = reorder.workingOrder.mapNotNull { pinById[it] }
+            orderedPinned + unpinned
+        } else {
+            orderedAll
         }
+    }
+
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
+        Title(
+            title = stringResource(id = R.string.page_library_playlists),
+            onBack = {
+                if (reorder.active) reorder.cancel() else navController.popBackStack()
+            },
+            rightBarIcon = if (reorder.active) {
+                {
+                    TitleBarIcon(
+                        icon = Icons.Default.Check,
+                        onBack = {
+                            PlayListLibrary.reorderPins(reorder.snapshot())
+                            reorder.cancel()
+                        },
+                    )
+                }
+            } else null,
+            content = {
+                item("AddList") {
+                    val targetTitle = context.getString(R.string.page_library_playlists_add_title)
+                    PlayListItem(playListType = PlayListType.Add, title = targetTitle) {
+                        if (!reorder.active) createPickerOpen.value = true
+                    }
+                    PlayListDivider()
+                }
+
+                item("FavList") {
+                    val targetTitle = context.getString(R.string.page_library_playlists_fav_title)
+                    PlayListItem(playListType = PlayListType.Favorite, title = targetTitle) {
+                        if (reorder.active) return@PlayListItem
+                        scope.launch(Dispatchers.IO) {
+                            val targetList = FavPlayListLibrary.favPlayList
+                            LibraryObject.setTargetListWithTitle(targetTitle, targetList)
+                            withContext(Dispatchers.Main) {
+                                navController.toUI(UI.NormalMusic)
+                            }
+                        }
+                    }
+                    PlayListDivider()
+                }
+
+                itemsIndexed(
+                    effectiveOrder,
+                    key = { _, p -> p.listID }
+                ) { index, playList ->
+                    val isPinned = playList.isPinned
+                    val dimmed = reorder.active && !isPinned
+                    val draggingThis = reorder.draggingId == playList.listID
+
+                    PinnedAwarePlayListItem(
+                        playList = playList,
+                        isPinned = isPinned,
+                        reorderActive = reorder.active,
+                        draggingThisRow = draggingThis,
+                        dragOffsetPx = if (draggingThis) reorder.dragOffset else 0f,
+                        dimmed = dimmed,
+                        onClick = {
+                            if (reorder.active) return@PinnedAwarePlayListItem
+                            scope.launch(Dispatchers.IO) {
+                                val targetTitle = playList.name
+                                val targetList = convertToSongList(playList.songDataList, songs)
+                                LibraryObject.setTargetListWithTitle(
+                                    targetTitle,
+                                    targetList,
+                                    playListId = playList.listID,
+                                )
+                                withContext(Dispatchers.Main) {
+                                    navController.toUI(UI.NormalMusic)
+                                }
+                            }
+                        },
+                        onLongPress = if (isPinned) {
+                            {
+                                if (!reorder.active) {
+                                    Vibrator.longClick(context)
+                                    reorder.enter(pinned.map { it.listID })
+                                }
+                            }
+                        } else null,
+                        onDragStart = if (isPinned) {
+                            { reorder.startDrag(playList.listID) }
+                        } else null,
+                        onDrag = if (isPinned) {
+                            { delta -> reorder.updateDrag(delta, rowHeightPx) }
+                        } else null,
+                        onDragEnd = if (isPinned) {
+                            { reorder.endDrag() }
+                        } else null,
+                    )
+
+                    key(index) {
+                        val needDivider = index < effectiveOrder.size - 1
+                        if (needDivider) {
+                            PlayListDivider()
+                        }
+                    }
+                }
+            }
+        )
+
+        // PRD FR-M-10: in-page undo snackbar surfaced when the user
+        // returns from the detail page after a delete. Tap "Undo" to
+        // restore at the original position; auto-dismisses after 5s.
+        val message = snackbarMessage.value
+        if (message != null && pendingDelete != null) {
+            UndoSnackbar(
+                message = message,
+                actionLabel = undoActionLabel,
+                onAction = {
+                    PendingPlayListDeletion.consume()?.let {
+                        PlayListLibrary.restore(it.playList, it.originalIndex)
+                    }
+                    snackbarMessage.value = null
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayListDivider() {
+    Spacer(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 102.dp)
+            .alpha(0.15f)
+            .height(0.5.dp)
+            .background(Color.Black withNight Color.White),
     )
 }
 
@@ -314,6 +418,218 @@ private fun LazyItemScope.PlayListItem(playListType: PlayListType, title: String
             modifier = Modifier
                 .height(40.dp)
                 .alpha(0.3f), tint = MaterialTheme.colorScheme.onBackground
+        )
+    }
+}
+
+/**
+ * Pin-aware variant of [PlayListItem] used for the Library list
+ * (PRD §5.4). Adds:
+ *   - a small pin badge over the cover when [isPinned],
+ *   - a long-press detector on pinned rows that enters reorder
+ *     mode (via the caller-supplied [onLongPress]),
+ *   - a trailing drag handle and translation Y while in reorder mode.
+ *
+ * Non-pinned rows behave exactly like the legacy [PlayListItem]; the
+ * external [dimmed] flag drives a visual "this row isn't interactive
+ * right now" cue while reorder mode is active.
+ */
+@Composable
+private fun LazyItemScope.PinnedAwarePlayListItem(
+    playList: PlayList,
+    isPinned: Boolean,
+    reorderActive: Boolean,
+    draggingThisRow: Boolean,
+    dragOffsetPx: Float,
+    dimmed: Boolean,
+    onClick: () -> Unit,
+    onLongPress: (() -> Unit)?,
+    onDragStart: (() -> Unit)?,
+    onDrag: ((Float) -> Unit)?,
+    onDragEnd: (() -> Unit)?,
+) {
+    val shape = YosRoundedCornerShape(4.dp)
+    val density = LocalDensity.current
+    val rowAlpha = if (dimmed) 0.35f else 1f
+
+    Row(
+        modifier = Modifier
+            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+            .height(80.dp)
+            .fillMaxWidth()
+            .graphicsLayer {
+                translationY = dragOffsetPx
+                if (draggingThisRow) {
+                    scaleX = 1.02f
+                    scaleY = 1.02f
+                    shadowElevation = 16f
+                }
+            }
+            .clickable(enabled = !reorderActive) { onClick() }
+            .then(
+                if (onLongPress != null) {
+                    Modifier.pointerInput(playList.listID, reorderActive) {
+                        if (reorderActive) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { onDragStart?.invoke() },
+                                onDragEnd = { onDragEnd?.invoke() },
+                                onDragCancel = { onDragEnd?.invoke() },
+                                onDrag = { _, dragAmount ->
+                                    onDrag?.invoke(dragAmount.y)
+                                },
+                            )
+                        } else {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { onLongPress() },
+                                onDragEnd = {},
+                                onDragCancel = {},
+                                onDrag = { _, _ -> },
+                            )
+                        }
+                    }
+                } else Modifier
+            )
+            .alpha(rowAlpha)
+            .padding(start = 22.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.size(64.dp)) {
+            Image(
+                painter = painterResource(id = R.drawable.placeholder_playlist_default),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(64.dp)
+                    .graphicsLayer {
+                        compositingStrategy = CompositingStrategy.Offscreen
+                        clip = true
+                        this.shape = shape
+                    }
+                    .drawWithCache {
+                        onDrawWithContent {
+                            drawContent()
+                            val outline = shape.createOutline(
+                                Size(size.width, size.height),
+                                LayoutDirection.Ltr,
+                                density,
+                            )
+                            drawOutline(
+                                outline = outline,
+                                color = Color.Gray.copy(alpha = 0.1f),
+                                style = Stroke(width = 8f),
+                            )
+                            drawOutline(
+                                outline = outline,
+                                color = Color.Gray.copy(alpha = 0.5f),
+                                style = Stroke(width = 8f),
+                                blendMode = BlendMode.Overlay,
+                            )
+                        }
+                    },
+            )
+            if (isPinned) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                        .size(18.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = YosRoundedCornerShape(9.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_action_pin),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(11.dp),
+                    )
+                }
+            }
+        }
+
+        Column(
+            Modifier
+                .padding(start = 16.dp)
+                .weight(1f),
+        ) {
+            Text(
+                text = playList.name,
+                modifier = Modifier.padding(bottom = 1.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 16.sp,
+                lineHeight = 16.sp,
+            )
+        }
+
+        if (reorderActive && isPinned) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_action_drag_handle),
+                contentDescription = stringResource(R.string.playlist_edit_drag_handle_cd),
+                modifier = Modifier
+                    .size(28.dp)
+                    .alpha(0.55f),
+                tint = MaterialTheme.colorScheme.onBackground,
+            )
+        } else {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_action_next),
+                contentDescription = null,
+                modifier = Modifier
+                    .height(40.dp)
+                    .alpha(0.3f),
+                tint = MaterialTheme.colorScheme.onBackground,
+            )
+        }
+    }
+}
+
+/**
+ * Bottom-aligned snackbar surface for the delete-undo flow
+ * (PRD FR-M-10). Auto-dismisses after 5s; the host's
+ * [PendingPlayListDeletion.consume] timer cleans up state.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.UndoSnackbar(
+    message: String,
+    actionLabel: String,
+    onAction: () -> Unit,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 24.dp, start = 16.dp, end = 16.dp)
+            .fillMaxWidth()
+            .background(
+                color = (Color.DarkGray withNight Color.Gray).copy(alpha = 0.95f),
+                shape = YosRoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = message,
+            color = Color.White,
+            fontSize = 15.sp,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = actionLabel,
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 15.sp,
+            modifier = Modifier
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    Vibrator.click(context)
+                    onAction()
+                },
         )
     }
 }
