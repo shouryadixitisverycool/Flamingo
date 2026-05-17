@@ -636,49 +636,16 @@ private fun EditSongRow(
             .alpha(rowAlpha),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Checkbox.
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(
-                    if (isStaged) destructive
-                    else (Color.LightGray withNight Color.DarkGray).copy(alpha = 0.0f),
-                )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    Vibrator.click(context)
-                    onToggleStaged()
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isStaged) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_action_check),
-                    contentDescription = stringResource(R.string.playlist_edit_remove_cd),
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(destructive.copy(alpha = 0.0f))
-                        .graphicsLayer {
-                            this.shape = RoundedCornerShape(5.dp)
-                        },
-                ) {
-                    // Outline-only checkbox.
-                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-                        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
-                        drawRect(color = destructive, style = stroke)
-                    }
-                }
-            }
-        }
+        // Checkbox — rounded square; filled with the destructive
+        // accent when staged for removal, outline-only when not.
+        // The outline is drawn with drawRoundRect (not drawRect inside
+        // a clipped Box) so corners render smoothly without the
+        // gappy artifacts the previous version produced.
+        RemovalCheckbox(
+            checked = isStaged,
+            destructive = destructive,
+            onToggle = onToggleStaged,
+        )
         Spacer(modifier = Modifier.width(14.dp))
         // Album art (or default).
         Box(
@@ -739,6 +706,77 @@ private fun EditSongRow(
                 iconRes = R.drawable.ic_back,
                 rotationDegrees = -90f,
                 onClick = onMoveDown,
+            )
+        }
+    }
+}
+
+/**
+ * Square checkbox styled for "stage for removal" semantics. The
+ * outline is drawn with [androidx.compose.foundation.Canvas] +
+ * `drawRoundRect` so the corners are continuous; the previous
+ * version composed `drawRect` (sharp corners) inside a parent with a
+ * [RoundedCornerShape] clip, which produced the visible breaks the
+ * user reported.
+ */
+@Composable
+private fun RemovalCheckbox(
+    checked: Boolean,
+    destructive: Color,
+    onToggle: () -> Unit,
+) {
+    val context = LocalContext.current
+    val boxSize = 22.dp
+    val cornerRadius = 5.dp
+    val strokeWidth = 1.6.dp
+
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {
+                Vibrator.click(context)
+                onToggle()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(boxSize)) {
+            val rPx = cornerRadius.toPx()
+            val swPx = strokeWidth.toPx()
+            if (checked) {
+                // Filled rounded square; check glyph is drawn over it
+                // by the Icon below.
+                drawRoundRect(
+                    color = destructive,
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(rPx, rPx),
+                )
+            } else {
+                // Outline only. Inset by half the stroke so the stroke
+                // sits entirely inside the box bounds — otherwise the
+                // outer edge gets clipped at 0,0 by the canvas bounds.
+                val inset = swPx / 2f
+                drawRoundRect(
+                    color = destructive,
+                    topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                    size = androidx.compose.ui.geometry.Size(
+                        size.width - swPx,
+                        size.height - swPx,
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                        rPx - inset, rPx - inset,
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = swPx),
+                )
+            }
+        }
+        if (checked) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_action_check),
+                contentDescription = stringResource(R.string.playlist_edit_remove_cd),
+                tint = Color.White,
+                modifier = Modifier.size(14.dp),
             )
         }
     }
