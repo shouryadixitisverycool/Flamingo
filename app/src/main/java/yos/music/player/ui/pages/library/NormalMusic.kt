@@ -85,6 +85,7 @@ import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.pages.library.albums.NormalButton
 import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
 import yos.music.player.ui.pages.library.playlists.PlayListOverflowSheet
+import yos.music.player.ui.pages.library.playlists.PlayListSearch
 import yos.music.player.ui.pages.library.playlists.PlayListSort
 import yos.music.player.ui.pages.library.playlists.PlayListSortPreference
 import yos.music.player.ui.theme.withNight
@@ -146,10 +147,12 @@ fun NormalMusic(navController: NavController) {
             }
 
             YosWrapper {
-                // PRD FR-M-05: when on a playlist, sort is view-only
-                // and driven by [PlayListSortPreference]; the "Songs"
-                // / album / artist views continue using the existing
-                // global SongSort + EnableDescending preferences.
+                // PRD FR-M-05 + FR-S-06/07/08: on a playlist, sort
+                // is view-only and search is fuzzy with relevance
+                // ranking overriding the chosen sort. Search runs on
+                // Dispatchers.Default with a 150ms debounce — the
+                // delay() inside the launched effect gives Compose
+                // a chance to cancel + restart for in-flight typing.
                 LaunchedEffect(
                     searchText.value,
                     SongSort,
@@ -158,9 +161,15 @@ fun NormalMusic(navController: NavController) {
                     PlayListSortPreference.sort,
                     PlayListSortPreference.descending,
                 ) {
-                    withContext(Dispatchers.IO) {
-                        val filteredList = withContext(Dispatchers.IO) {
-                            if (useSearch.value) {
+                    if (activePlayList != null && useSearch.value) {
+                        // Debounce typing — FR-S-08.
+                        kotlinx.coroutines.delay(150)
+                    }
+                    withContext(Dispatchers.Default) {
+                        val filteredList = if (useSearch.value) {
+                            if (activePlayList != null) {
+                                PlayListSearch.matchAndRank(musicList, searchText.value)
+                            } else {
                                 songs.asSequence().filter { song ->
                                     (song.title ?: defaultTitle).contains(
                                         searchText.value,
@@ -173,12 +182,15 @@ fun NormalMusic(navController: NavController) {
                                                 )
                                             }
                                 }.toList()
-                            } else {
-                                musicList
                             }
+                        } else {
+                            musicList
                         }
                         list.value = if (activePlayList != null) {
-                            filteredList.sortForPlaylist()
+                            // FR-S-07: relevance ranking overrides
+                            // Sort By while a query is active.
+                            if (useSearch.value) filteredList
+                            else filteredList.sortForPlaylist()
                         } else {
                             filteredList.sortX()
                         }
@@ -195,6 +207,20 @@ fun NormalMusic(navController: NavController) {
             // the new bottom-sheet menu instead of the FloatingMenu
             // (which remains the right surface for Songs / Album / etc.).
             val overflowSheetOpen = remember { mutableStateOf(false) }
+
+            // PRD §5.1 FR-S-01/02: pull-to-reveal search. The search
+            // field is the first list item; on first composition we
+            // jump past it (so it's hidden) and rely on the existing
+            // overscroll machinery to reveal it on a pull-down.
+            val playlistListState = if (activePlayList != null) rememberLazyListState() else null
+            if (activePlayList != null && playlistListState != null) {
+                LaunchedEffect(activePlayList.listID) {
+                    // Hide the search field on entry. Item index 1
+                    // is the search field (item 0 is the Title's own
+                    // big-title header).
+                    playlistListState.scrollToItem(2)
+                }
+            }
 
             Box(Modifier.fillMaxSize()) {
                 if (activePlayList == null) {
@@ -280,26 +306,61 @@ fun NormalMusic(navController: NavController) {
                                 }
                             }
                         )
-                    }
+                    },
+                    listState = playlistListState,
                 ) {
                     item("SearchField") {
                         val keyboardController = LocalSoftwareKeyboardController.current
+                        val placeholder = if (activePlayList != null) {
+                            stringResource(id = R.string.playlist_search_placeholder)
+                        } else {
+                            stringResource(id = R.string.page_library_search_songs)
+                        }
 
-                        SearchTextField(
-                            text = searchText.value,
-                            placeholder = stringResource(id = R.string.page_library_search_songs),
-                            onValueChange = {
-                                searchText.value = it
-                            },
-                            modifier = Modifier
+                        // FR-S-04: trailing X to clear text (playlist only).
+                        // For non-playlist views we keep the original
+                        // baseline appearance.
+                        Row(
+                            Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 18.dp)
                                 .padding(top = 5.dp),
-                            onSearch = {
-                                if (searchText.value.isNotEmpty()) {
-                                    keyboardController?.hide()
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SearchTextField(
+                                text = searchText.value,
+                                placeholder = placeholder,
+                                onValueChange = { searchText.value = it },
+                                modifier = Modifier.weight(1f),
+                                onSearch = {
+                                    if (searchText.value.isNotEmpty()) {
+                                        keyboardController?.hide()
+                                    }
+                                },
+                            )
+                            if (activePlayList != null && searchText.value.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            onClick = { searchText.value = "" },
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_action_close),
+                                        contentDescription = stringResource(R.string.playlist_search_clear_cd),
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .alpha(0.55f),
+                                        tint = MaterialTheme.colorScheme.onBackground,
+                                    )
                                 }
-                            })
+                            }
+                        }
                     }
                     item("Options") {
                         Row(
