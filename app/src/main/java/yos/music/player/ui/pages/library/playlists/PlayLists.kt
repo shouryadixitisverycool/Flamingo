@@ -128,7 +128,13 @@ fun PlayLists(navController: NavController) {
                     scope.launch(Dispatchers.IO) {
                         val targetTitle = playList.name
                         val targetList = convertToSongList(playList.songDataList, songs)
-                        LibraryObject.setTargetListWithTitle(targetTitle, targetList)
+                        // PRD §5.2: thread playlist ID through so the
+                        // detail page can surface playlist-only actions.
+                        LibraryObject.setTargetListWithTitle(
+                            targetTitle,
+                            targetList,
+                            playListId = playList.listID,
+                        )
                         withContext(Dispatchers.Main) {
                             navController.toUI(UI.NormalMusic)
                         }

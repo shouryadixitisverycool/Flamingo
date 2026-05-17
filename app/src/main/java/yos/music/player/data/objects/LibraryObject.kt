@@ -22,9 +22,24 @@ object LibraryObject {
     private val targetList: MutableState<List<YosMediaItem>> = mutableStateOf(emptyList())
     @Stable
     private val targetListTitle = mutableStateOf("")
-    fun setTargetListWithTitle(title: String, list: List<YosMediaItem>) {
+
+    /**
+     * Identifier of the playlist whose contents are being shown in
+     * [yos.music.player.ui.pages.library.NormalMusic], or null if the
+     * page is showing some other list (Songs, Album, Artist, Folder).
+     *
+     * Set this alongside [setTargetListWithTitle] when navigating from
+     * a playlist so the detail page can light up playlist-only actions
+     * (Edit, Pin, Add-this-to-playlist, Play Next, Delete) without
+     * needing to rediscover which playlist it's rendering. Per PRD §5.2.
+     */
+    @Stable
+    val targetPlayListId: MutableState<String?> = mutableStateOf(null)
+
+    fun setTargetListWithTitle(title: String, list: List<YosMediaItem>, playListId: String? = null) {
         targetListTitle.value = title
         targetList.value = list
+        targetPlayListId.value = playListId
     }
     fun getTargetListWithTitle(): Pair<String, List<YosMediaItem>> {
         return Pair(targetListTitle.value, targetList.value)

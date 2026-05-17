@@ -249,27 +249,20 @@ fun PlayListPickerContent(
         ExistingPlayListList(
             songToAdd = songToAdd!!,
             onAdd = { playlist ->
-                val alreadyIn = playlist.songDataList.contains(songToAdd.uri)
-                if (alreadyIn) {
-                    Toast.makeText(
-                        context,
-                        context.getString(
-                            R.string.playlist_picker_already_in_toast,
-                            playlist.name,
-                        ),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                } else {
-                    playlist.addMusic(songToAdd)
-                    Toast.makeText(
-                        context,
-                        context.getString(
-                            R.string.playlist_picker_added_toast,
-                            playlist.name,
-                        ),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
+                // PRD FR-E-13: duplicates are allowed across the app.
+                // The picker no longer dedupes — adding the same song
+                // twice produces two distinct entries. The trailing
+                // checkmark in the row still signals "already in" for
+                // user awareness.
+                playlist.addMusic(songToAdd)
+                Toast.makeText(
+                    context,
+                    context.getString(
+                        R.string.playlist_picker_added_toast,
+                        playlist.name,
+                    ),
+                    Toast.LENGTH_SHORT,
+                ).show()
                 finish()
             },
         )
