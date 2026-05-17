@@ -120,4 +120,20 @@
     <string name="settings_performance_ui_nowplaying_show_volume_bar">顯示音量條</string>
     <string name="settings_performance_ui_nowplaying_show_volume_bar_desc">在播放界面的下部顯示音量調節條。</string>
     <string name="settings_performance_ui_theme">主題</string>
+
+    <!-- TODO: translate. Playlist picker. -->
+    <string name="playlist_picker_title">Add to Playlist</string>
+    <string name="playlist_picker_create_title">New Playlist</string>
+    <string name="playlist_picker_create_new">Create New Playlist</string>
+    <string name="playlist_picker_name_placeholder">Playlist name</string>
+    <string name="playlist_picker_create_confirm">Create</string>
+    <string name="playlist_picker_cancel">Cancel</string>
+    <string name="playlist_picker_duplicate_name">A playlist with that name already exists.</string>
+    <string name="playlist_picker_added_toast">Added to %1$s</string>
+    <string name="playlist_picker_already_in_toast">Already in %1$s</string>
+    <string name="playlist_picker_created_toast">Created %1$s</string>
+    <string name="playlist_picker_empty">No playlists yet. Tap “Create New Playlist” above.</string>
+    <string name="playlist_picker_song_count_one">1 song</string>
+    <string name="playlist_picker_song_count_other">%d songs</string>
+    <string name="playlist_picker_already_added_cd">Already in this playlist</string>
 </resources>

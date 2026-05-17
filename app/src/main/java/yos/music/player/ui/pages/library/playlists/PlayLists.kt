@@ -19,6 +19,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,12 +58,25 @@ import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
 import yos.music.player.ui.toUI
 import yos.music.player.ui.widgets.basic.Title
+import yos.music.player.ui.widgets.playlist.PlayListPickerSheet
 
 @Composable
 fun PlayLists(navController: NavController) {
     val playLists = playList.sortedBy { it.name }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // PRD §5.5 FR-AP-5: this page's "Add" row opens the same reusable picker
+    // used by the NowPlaying overflow menu, in create-only mode (no song to
+    // attach). Hoisting visibility to this composable keeps a single picker
+    // instance shared across the page.
+    val createPickerOpen = remember { mutableStateOf(false) }
+
+    PlayListPickerSheet(
+        isOpen = createPickerOpen,
+        songToAdd = null,
+    )
+
     Title(title = stringResource(id = R.string.page_library_playlists),
         onBack = {
             navController.popBackStack()
@@ -70,7 +85,7 @@ fun PlayLists(navController: NavController) {
             item("AddList") {
                 val targetTitle = context.getString(R.string.page_library_playlists_add_title)
                 PlayListItem(playListType = PlayListType.Add, title = targetTitle) {
-
+                    createPickerOpen.value = true
                 }
 
                 Spacer(
