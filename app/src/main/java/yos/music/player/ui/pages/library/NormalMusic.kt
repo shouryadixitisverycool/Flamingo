@@ -84,6 +84,7 @@ import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.pages.library.albums.NormalButton
 import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
+import yos.music.player.ui.pages.library.playlists.PlayListEditModal
 import yos.music.player.ui.pages.library.playlists.PlayListOverflowSheet
 import yos.music.player.ui.pages.library.playlists.PlayListSearch
 import yos.music.player.ui.pages.library.playlists.PlayListSort
@@ -207,6 +208,7 @@ fun NormalMusic(navController: NavController) {
             // the new bottom-sheet menu instead of the FloatingMenu
             // (which remains the right surface for Songs / Album / etc.).
             val overflowSheetOpen = remember { mutableStateOf(false) }
+            val editModalOpen = remember { mutableStateOf(false) }
 
             // PRD §5.1 FR-S-01/02: pull-to-reveal search. The search
             // field is the first list item; on first composition we
@@ -238,7 +240,7 @@ fun NormalMusic(navController: NavController) {
                         playList = activePlayList,
                         onEdit = {
                             // PRD §5.3: open the Edit Playlist modal.
-                            // Stubbed until the modal lands in a later commit.
+                            editModalOpen.value = true
                         },
                         onPlayNext = {
                             // PRD FR-M-09: insert the playlist's
@@ -283,6 +285,11 @@ fun NormalMusic(navController: NavController) {
                             PendingPlayListDeletion.stash(toRestore, originalIndex)
                             navController.popBackStack()
                         },
+                    )
+
+                    PlayListEditModal(
+                        isOpen = editModalOpen,
+                        source = activePlayList,
                     )
                 }
 
