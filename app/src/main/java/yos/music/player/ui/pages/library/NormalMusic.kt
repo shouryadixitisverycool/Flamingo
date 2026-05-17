@@ -250,26 +250,58 @@ fun NormalMusic(navController: NavController) {
                         onPlayNext = {
                             // PRD FR-M-09: insert the playlist's
                             // current songs right after the now-
-                            // playing track. Falls back to
-                            // setMediaItems when nothing is playing.
+                            // playing track. Updates both the
+                            // ExoPlayer queue and the app's
+                            // [MediaController.playingMusicList]
+                            // snapshot so the NowPlaying queue UI
+                            // (which renders from playingMusicList,
+                            // not the live player) reflects the
+                            // insert immediately. Falls back to
+                            // [MediaController.prepare] when nothing
+                            // is currently playing.
                             scope.launch(Dispatchers.IO) {
-                                val urisInOrder = activePlayList.songDataList
-                                val songsInOrder = urisInOrder.mapNotNull { uri ->
-                                    musicList.firstOrNull { it.uri == uri }
+                                // Resolve the playlist's URIs against
+                                // the global song library — musicList
+                                // here is whatever the page is showing
+                                // (which may be filtered by an active
+                                // search query), so we go straight to
+                                // the canonical store.
+                                val songsInOrder = activePlayList.songDataList.mapNotNull { uri ->
+                                    yos.music.player.data.libraries.MusicLibrary.songs
+                                        .firstOrNull { it.uri == uri }
                                 }
                                 if (songsInOrder.isEmpty()) return@launch
-                                withContext(Dispatchers.Main) {
-                                    val ctrl = MediaController.mediaControl
-                                    if (ctrl == null || ctrl.mediaItemCount == 0) {
-                                        // Nothing to insert after — start from the first.
-                                        scope.launch(Dispatchers.IO) {
-                                            MediaController.prepare(songsInOrder.first(), songsInOrder)
-                                        }
-                                    } else {
-                                        val insertAt = ctrl.currentMediaItemIndex + 1
-                                        val mediaItems = songsInOrder.map { it.toMediaItem() }
+
+                                val ctrl = MediaController.mediaControl
+                                val currentQueue = MediaController.playingMusicList.value
+                                val currentPlaying = MediaController.musicPlaying.value
+
+                                if (ctrl == null || currentQueue.isNullOrEmpty() || currentPlaying == null) {
+                                    // Nothing is playing — start fresh
+                                    // with the playlist as the new queue.
+                                    MediaController.prepare(songsInOrder.first(), songsInOrder)
+                                } else {
+                                    val mediaItems = songsInOrder.map { it.toMediaItem() }
+                                    val insertAt = currentQueue.indexOfFirst {
+                                        it.uri == currentPlaying.uri
+                                    }.let { if (it < 0) 0 else it + 1 }
+
+                                    withContext(Dispatchers.Main) {
+                                        // Insert into the live player.
                                         ctrl.addMediaItems(insertAt, mediaItems)
                                     }
+                                    // Mirror the insert into the app's
+                                    // queue snapshot so PlayingList in
+                                    // NowPlaying re-renders. Done off
+                                    // the main thread since list
+                                    // assignment triggers Compose work.
+                                    val updated = currentQueue.toMutableList().also {
+                                        it.addAll(insertAt, songsInOrder)
+                                    }
+                                    MediaController.playingMusicList.value = updated
+                                }
+
+                                withContext(Dispatchers.Main) {
                                     val msg = if (songsInOrder.size == 1) playNextOneFmt
                                         else playNextManyFmt.format(songsInOrder.size)
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -712,6 +744,7 @@ fun FloatingMenuDivider() =
 private fun PlayListDetailHeader(playList: PlayList) {
     val context = LocalContext.current
     val shape = YosRoundedCornerShape(16.dp)
+    val density = LocalDensity.current
 
     // Resolve the playlist's songs to YosMediaItem for the
     // auto-collage path; only needed when no custom cover is set.
