@@ -322,22 +322,42 @@ fun ActionSheet(
         onDismissRequest = onDismiss,
         cornerRadius = cornerRadius,
     ) {
-        if (header != null) {
-            header()
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp)
-                    .alpha(0.15f)
-                    .height(0.5.dp)
-                    .background(Color.Black withNight Color.White)
-            )
-        }
-        items.forEachIndexed { index, item ->
-            ActionSheetRow(item = item)
-            if (index < items.lastIndex) {
-                Spacer(modifier = Modifier.height(4.dp))
-            }
+        ActionSheetBody(header = header, items = items)
+    }
+}
+
+/**
+ * Bare action-sheet body — the content of an [ActionSheet] without its
+ * surrounding [YosBottomSheetDialog]. Use this when you want to render the
+ * action list inside another bottom sheet (e.g. the NowPlaying overflow
+ * menu hosts its own sheet and swaps between this body and the
+ * playlist-picker / sleep-timer content based on internal navigation, so
+ * the sub-screens appear without a close + reopen animation).
+ *
+ * @param header optional composable rendered above the action list. A 1px
+ *   divider separates the header from the rows when present.
+ * @param items the action rows, in display order.
+ */
+@Composable
+fun ActionSheetBody(
+    header: (@Composable () -> Unit)? = null,
+    items: List<ActionItem>,
+) {
+    if (header != null) {
+        header()
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
+                .alpha(0.15f)
+                .height(0.5.dp)
+                .background(Color.Black withNight Color.White)
+        )
+    }
+    items.forEachIndexed { index, item ->
+        ActionSheetRow(item = item)
+        if (index < items.lastIndex) {
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }

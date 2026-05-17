@@ -83,8 +83,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -161,10 +163,11 @@ import yos.music.player.ui.widgets.audio.MusicQualityIndicator
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import yos.music.player.ui.widgets.basic.ActionItem
-import yos.music.player.ui.widgets.basic.ActionSheet
+import yos.music.player.ui.widgets.basic.ActionSheetBody
 import yos.music.player.ui.widgets.basic.ImageQuality
-import yos.music.player.ui.widgets.playlist.PlayListPickerSheet
-import yos.music.player.ui.widgets.sleeptimer.SleepTimerSheet
+import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
+import yos.music.player.ui.widgets.playlist.PlayListPickerContent
+import yos.music.player.ui.widgets.sleeptimer.SleepTimerContent
 import yos.music.player.code.SleepTimer
 import yos.music.player.code.SleepTimerState
 import yos.music.player.ui.widgets.basic.ShadowImageWithCache
@@ -1329,7 +1332,11 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
  * [MediaController.musicPlaying] for the header, so subsequent track changes
  * while the sheet is open do not mutate the displayed song.
  *
- * Stub rows (Add to Playlist, Sleep Timer) are wired in later steps.
+ * Layout uses a single bottom sheet that swaps its body between three
+ * internal screens (Menu / Playlist picker / Sleep timer). Selecting a row
+ * doesn't dismiss + re-open a sub-sheet — the same sheet stays mounted and
+ * its content changes in place, avoiding the visible close + reopen
+ * animation that two separate sheets would cause.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1337,10 +1344,46 @@ private fun NowPlayingOverflowSheet(
     isOpen: MutableState<Boolean>,
     song: YosMediaItem?,
 ) {
-    // Sub-sheets: opened from rows in this overflow menu.
-    val playlistPickerOpen = remember { mutableStateOf(false) }
-    val sleepTimerOpen = remember { mutableStateOf(false) }
+    if (!isOpen.value) return
 
+    // Internal navigation. Defaults to [OverflowScreen.Menu]; resets each
+    // time the sheet is dismissed via the LaunchedEffect in onDone() below.
+    var screen by remember { mutableStateOf(OverflowScreen.Menu) }
+
+    val onDismiss: () -> Unit = {
+        isOpen.value = false
+        // Reset so the next open lands on the Menu screen.
+        screen = OverflowScreen.Menu
+    }
+
+    YosBottomSheetDialog(onDismissRequest = onDismiss) {
+        when (screen) {
+            OverflowScreen.Menu -> OverflowMenuBody(
+                song = song,
+                onPickPlaylist = { screen = OverflowScreen.Playlist },
+                onPickSleepTimer = { screen = OverflowScreen.SleepTimer },
+            )
+
+            OverflowScreen.Playlist -> PlayListPickerContent(
+                songToAdd = song,
+                onDone = onDismiss,
+            )
+
+            OverflowScreen.SleepTimer -> SleepTimerContent(
+                onDone = onDismiss,
+            )
+        }
+    }
+}
+
+private enum class OverflowScreen { Menu, Playlist, SleepTimer }
+
+@Composable
+private fun OverflowMenuBody(
+    song: YosMediaItem?,
+    onPickPlaylist: () -> Unit,
+    onPickSleepTimer: () -> Unit,
+) {
     val addToPlaylistLabel = stringResource(R.string.now_playing_overflow_add_to_playlist)
     val sleepTimerLabel = stringResource(R.string.now_playing_overflow_sleep_timer)
 
@@ -1350,47 +1393,30 @@ private fun NowPlayingOverflowSheet(
     val accent = MaterialTheme.colorScheme.primary
 
     val items = remember(
-        song, addToPlaylistLabel, sleepTimerLabel, sleepTimerActive, accent,
+        addToPlaylistLabel, sleepTimerLabel, sleepTimerActive, accent,
+        onPickPlaylist, onPickSleepTimer,
     ) {
         listOf(
             ActionItem(
                 iconRes = R.drawable.ic_action_add,
                 label = addToPlaylistLabel,
-                onClick = {
-                    // Dismiss the overflow sheet, then open the playlist picker.
-                    // The snapshotted song flows into the picker via [song].
-                    isOpen.value = false
-                    playlistPickerOpen.value = true
-                },
+                onClick = onPickPlaylist,
             ),
             ActionItem(
                 iconRes = R.drawable.ic_setting_moon,
                 label = sleepTimerLabel,
                 tint = if (sleepTimerActive) accent else null,
-                onClick = {
-                    isOpen.value = false
-                    sleepTimerOpen.value = true
-                },
+                onClick = onPickSleepTimer,
             ),
         )
     }
 
-    ActionSheet(
-        isOpen = isOpen,
+    ActionSheetBody(
         header = if (song != null) {
             { NowPlayingOverflowHeader(song = song) }
         } else null,
         items = items,
     )
-
-    // Playlist picker — opened from the row above. Receives the snapshot song.
-    PlayListPickerSheet(
-        isOpen = playlistPickerOpen,
-        songToAdd = song,
-    )
-
-    // Sleep timer sheet — controls SleepTimer singleton state directly.
-    SleepTimerSheet(isOpen = sleepTimerOpen)
 }
 
 /**

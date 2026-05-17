@@ -89,6 +89,36 @@ fun PlayListPickerSheet(
 ) {
     if (!isOpen.value) return
 
+    YosBottomSheetDialog(onDismissRequest = { isOpen.value = false }) {
+        PlayListPickerContent(
+            songToAdd = songToAdd,
+            onDone = { isOpen.value = false },
+            onCreated = onCreated,
+        )
+    }
+}
+
+/**
+ * Bare picker content — the body of [PlayListPickerSheet] without its
+ * surrounding [YosBottomSheetDialog]. Use this when you want to render the
+ * picker INSIDE another bottom sheet (e.g. the NowPlaying overflow menu
+ * swaps its content to this composable when the user picks "Add to a
+ * Playlist", so the sub-screen appears without a close + reopen animation).
+ *
+ * @param songToAdd song to attach to the selected playlist, or `null` for
+ *   create-only mode.
+ * @param onDone called when the picker should be torn down — either after
+ *   a successful add/create, or when the host should close the containing
+ *   sheet entirely. The host decides what "done" means (e.g. dismiss the
+ *   sheet, or return to a previous internal screen).
+ * @param onCreated optional callback fired after a new playlist is created.
+ */
+@Composable
+fun PlayListPickerContent(
+    songToAdd: YosMediaItem?,
+    onDone: () -> Unit,
+    onCreated: ((PlayList) -> Unit)? = null,
+) {
     val context = LocalContext.current
     // Local UI state: are we in "create new playlist" mode (text input
     // visible) or the default list view?
@@ -96,12 +126,15 @@ fun PlayListPickerSheet(
     var newPlaylistName by remember { mutableStateOf("") }
     var nameError by remember { mutableStateOf<String?>(null) }
 
-    val onDismiss: () -> Unit = {
-        isOpen.value = false
-        // Reset transient state so the next open is fresh.
+    val resetTransient: () -> Unit = {
         createMode = songToAdd == null
         newPlaylistName = ""
         nameError = null
+    }
+
+    val finish: () -> Unit = {
+        resetTransient()
+        onDone()
     }
 
     val confirmCreate: () -> Unit = {
@@ -139,87 +172,85 @@ fun PlayListPickerSheet(
                     }
                     onCreated?.invoke(created)
                 }
-                onDismiss()
+                finish()
             }
         }
     }
 
-    YosBottomSheetDialog(onDismissRequest = onDismiss) {
-        // Title bar: in create-only mode, no back arrow; in picker mode with
-        // create-mode toggled on, show a back arrow to return to the list.
-        PickerHeader(
-            title = if (createMode) {
-                stringResource(R.string.playlist_picker_create_title)
-            } else {
-                stringResource(R.string.playlist_picker_title)
-            },
-            showBack = createMode && songToAdd != null,
-            onBack = {
-                createMode = false
-                newPlaylistName = ""
+    // Title bar: in create-only mode, no back arrow; in picker mode with
+    // create-mode toggled on, show a back arrow to return to the list.
+    PickerHeader(
+        title = if (createMode) {
+            stringResource(R.string.playlist_picker_create_title)
+        } else {
+            stringResource(R.string.playlist_picker_title)
+        },
+        showBack = createMode && songToAdd != null,
+        onBack = {
+            createMode = false
+            newPlaylistName = ""
+            nameError = null
+        },
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    if (createMode) {
+        CreatePlaylistBody(
+            name = newPlaylistName,
+            onNameChange = {
+                newPlaylistName = it
                 nameError = null
+            },
+            errorMessage = nameError,
+            onConfirm = confirmCreate,
+            onCancel = if (songToAdd == null) finish else {
+                {
+                    createMode = false
+                    newPlaylistName = ""
+                    nameError = null
+                }
+            },
+        )
+    } else {
+        // Picker mode: "Create New Playlist" entry + list of existing playlists.
+        CreateNewRow(
+            onClick = {
+                Vibrator.click(context)
+                createMode = true
             },
         )
 
         Spacer(modifier = Modifier.height(8.dp))
+        Divider()
 
-        if (createMode) {
-            CreatePlaylistBody(
-                name = newPlaylistName,
-                onNameChange = {
-                    newPlaylistName = it
-                    nameError = null
-                },
-                errorMessage = nameError,
-                onConfirm = confirmCreate,
-                onCancel = if (songToAdd == null) onDismiss else {
-                    {
-                        createMode = false
-                        newPlaylistName = ""
-                        nameError = null
-                    }
-                },
-            )
-        } else {
-            // Picker mode: "Create New Playlist" entry + list of existing playlists.
-            CreateNewRow(
-                onClick = {
-                    Vibrator.click(context)
-                    createMode = true
-                },
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Divider()
-
-            ExistingPlayListList(
-                songToAdd = songToAdd!!,
-                onAdd = { playlist ->
-                    val alreadyIn = playlist.songDataList.contains(songToAdd.uri)
-                    if (alreadyIn) {
-                        Toast.makeText(
-                            context,
-                            context.getString(
-                                R.string.playlist_picker_already_in_toast,
-                                playlist.name,
-                            ),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    } else {
-                        playlist.addMusic(songToAdd)
-                        Toast.makeText(
-                            context,
-                            context.getString(
-                                R.string.playlist_picker_added_toast,
-                                playlist.name,
-                            ),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                    onDismiss()
-                },
-            )
-        }
+        ExistingPlayListList(
+            songToAdd = songToAdd!!,
+            onAdd = { playlist ->
+                val alreadyIn = playlist.songDataList.contains(songToAdd.uri)
+                if (alreadyIn) {
+                    Toast.makeText(
+                        context,
+                        context.getString(
+                            R.string.playlist_picker_already_in_toast,
+                            playlist.name,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    playlist.addMusic(songToAdd)
+                    Toast.makeText(
+                        context,
+                        context.getString(
+                            R.string.playlist_picker_added_toast,
+                            playlist.name,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+                finish()
+            },
+        )
     }
 }
 

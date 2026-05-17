@@ -70,28 +70,40 @@ import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
 fun SleepTimerSheet(isOpen: MutableState<Boolean>) {
     if (!isOpen.value) return
 
+    YosBottomSheetDialog(onDismissRequest = { isOpen.value = false }) {
+        SleepTimerContent(onDone = { isOpen.value = false })
+    }
+}
+
+/**
+ * Bare sleep-timer content — the body of [SleepTimerSheet] without its
+ * surrounding [YosBottomSheetDialog]. Use this when you want to render the
+ * sleep timer inside another bottom sheet (e.g. the NowPlaying overflow
+ * menu swaps its content to this composable when the user picks
+ * "Sleep Timer", so the sub-screen appears without a close + reopen
+ * animation).
+ *
+ * @param onDone called when the timer flow should terminate — either after
+ *   the user starts/cancels a timer, or when the host should dismiss its
+ *   containing sheet.
+ */
+@Composable
+fun SleepTimerContent(onDone: () -> Unit) {
     var screen by remember { mutableStateOf(Screen.Presets) }
 
-    val onDismiss: () -> Unit = {
-        isOpen.value = false
-        screen = Screen.Presets
-    }
-
-    YosBottomSheetDialog(onDismissRequest = onDismiss) {
-        when (screen) {
-            Screen.Presets -> PresetScreen(
-                onPicked = { onDismiss() },
-                onOpenCustom = { screen = Screen.Custom },
-                onOpenFade = { screen = Screen.Fade },
-            )
-            Screen.Custom -> CustomScreen(
-                onCancel = { screen = Screen.Presets },
-                onConfirm = { onDismiss() },
-            )
-            Screen.Fade -> FadeScreen(
-                onBack = { screen = Screen.Presets },
-            )
-        }
+    when (screen) {
+        Screen.Presets -> PresetScreen(
+            onPicked = { onDone() },
+            onOpenCustom = { screen = Screen.Custom },
+            onOpenFade = { screen = Screen.Fade },
+        )
+        Screen.Custom -> CustomScreen(
+            onCancel = { screen = Screen.Presets },
+            onConfirm = { onDone() },
+        )
+        Screen.Fade -> FadeScreen(
+            onBack = { screen = Screen.Presets },
+        )
     }
 }
 
