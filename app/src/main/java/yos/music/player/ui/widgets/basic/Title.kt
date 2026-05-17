@@ -160,6 +160,14 @@ fun Title(
     onRightIcon: (() -> Unit)? = null,
     rightBarIcon: @Composable (RowScope.() -> Unit)? = null,
     bottomPadding: Dp = 134.dp,
+    /**
+     * Optional externally-owned list state. Lift this when the caller
+     * needs to drive scrolling (e.g. the in-playlist pull-to-reveal
+     * search, PRD §5.1, scrolls past a hidden search field on first
+     * composition). When null the title creates its own state, matching
+     * the long-standing default.
+     */
+    listState: LazyListState? = null,
     content: LazyListScope.() -> Unit
 ) =
     BaseTitle(
@@ -171,6 +179,7 @@ fun Title(
         rightBarIcon = rightBarIcon,
         grid = false,
         bottomPadding = bottomPadding,
+        listState = listState,
         content = content
     )
 
@@ -208,6 +217,7 @@ private fun BaseTitle(
     columns: () -> Int = { 2 },
     grid: Boolean,
     bottomPadding: Dp = 134.dp,
+    listState: LazyListState? = null,
     content: Any
 ) {
     if (grid) {
@@ -230,6 +240,7 @@ private fun BaseTitle(
             onRightIcon = onRightIcon,
             rightBarIcon = rightBarIcon,
             bottomPadding = bottomPadding,
+            listState = listState,
             content = content as LazyListScope.() -> Unit
         )
     }
@@ -307,9 +318,10 @@ private fun BaseTitleList(
     onRightIcon: (() -> Unit)? = null,
     rightBarIcon: @Composable (RowScope.() -> Unit)? = null,
     bottomPadding: Dp = 134.dp,
+    listState: LazyListState? = null,
     content: LazyListScope.() -> Unit
 ) {
-    val state = rememberLazyListState()
+    val state = listState ?: rememberLazyListState()
     val alpha = rememberAlpha(state)
     val showSmallTitle = rememberShowSmallTitle(alpha, state)
 

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
@@ -50,6 +51,8 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -67,6 +70,10 @@ import kotlinx.coroutines.withContext
 import yos.music.player.R
 import yos.music.player.code.MediaController
 import yos.music.player.data.libraries.MusicLibrary.songs
+import yos.music.player.data.libraries.MusicLibrary.toMediaItem
+import yos.music.player.data.libraries.PlayList
+import yos.music.player.data.libraries.PlayListLibrary
+import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.SettingsLibrary.EnableDescending
 import yos.music.player.data.libraries.SettingsLibrary.SongSort
@@ -76,6 +83,10 @@ import yos.music.player.data.libraries.defaultArtists
 import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.pages.library.albums.NormalButton
+import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
+import yos.music.player.ui.pages.library.playlists.PlayListOverflowSheet
+import yos.music.player.ui.pages.library.playlists.PlayListSort
+import yos.music.player.ui.pages.library.playlists.PlayListSortPreference
 import yos.music.player.ui.theme.withNight
 import yos.music.player.ui.widgets.basic.SearchTextField
 import yos.music.player.ui.widgets.basic.Title
@@ -90,6 +101,13 @@ fun NormalMusic(navController: NavController) {
         /*.statusBarsPadding()*/
     ) {
         val pageInfo = LibraryObject.getTargetListWithTitle()
+
+        // PRD §5.2: playlist-only actions surface only when we
+        // arrived from the Playlists page (which sets this state).
+        val playListId = LibraryObject.targetPlayListId.value
+        val activePlayList: PlayList? = remember(playListId, playList) {
+            playListId?.let { id -> playList.firstOrNull { it.listID == id } }
+        }
 
         val musicList = pageInfo.second
         val searchText = remember("NormalMusic_searchText") {
@@ -123,12 +141,24 @@ fun NormalMusic(navController: NavController) {
             }
         } else {
             val useSearch = remember { derivedStateOf { searchText.value.isNotEmpty() } }
-            val list: MutableState<List<YosMediaItem>> = remember { mutableStateOf(musicList.sortX()) }
+            val list: MutableState<List<YosMediaItem>> = remember {
+                mutableStateOf(if (activePlayList != null) musicList else musicList.sortX())
+            }
 
             YosWrapper {
-                LaunchedEffect(searchText.value, SongSort, EnableDescending) {
+                // PRD FR-M-05: when on a playlist, sort is view-only
+                // and driven by [PlayListSortPreference]; the "Songs"
+                // / album / artist views continue using the existing
+                // global SongSort + EnableDescending preferences.
+                LaunchedEffect(
+                    searchText.value,
+                    SongSort,
+                    EnableDescending,
+                    activePlayList?.listID,
+                    PlayListSortPreference.sort,
+                    PlayListSortPreference.descending,
+                ) {
                     withContext(Dispatchers.IO) {
-                        // if (list.value.isEmpty()) delay(320)
                         val filteredList = withContext(Dispatchers.IO) {
                             if (useSearch.value) {
                                 songs.asSequence().filter { song ->
@@ -147,7 +177,11 @@ fun NormalMusic(navController: NavController) {
                                 musicList
                             }
                         }
-                        list.value = filteredList.sortX()
+                        list.value = if (activePlayList != null) {
+                            filteredList.sortForPlaylist()
+                        } else {
+                            filteredList.sortX()
+                        }
                     }
                 }
             }
@@ -157,11 +191,73 @@ fun NormalMusic(navController: NavController) {
             val expanded = remember { mutableStateOf(false) }
             val buttonPosition = remember { mutableStateOf(Offset.Zero) }
 
+            // PRD §5.2: when viewing a playlist, the 3-dot icon opens
+            // the new bottom-sheet menu instead of the FloatingMenu
+            // (which remains the right surface for Songs / Album / etc.).
+            val overflowSheetOpen = remember { mutableStateOf(false) }
+
             Box(Modifier.fillMaxSize()) {
-                YosWrapper {
-                    FloatingMenu({ expanded.value }, {
-                        expanded.value = it
-                    }, buttonPosition.value)
+                if (activePlayList == null) {
+                    YosWrapper {
+                        FloatingMenu({ expanded.value }, {
+                            expanded.value = it
+                        }, buttonPosition.value)
+                    }
+                } else {
+                    val context = LocalContext.current
+                    val playNextOneFmt = stringResource(R.string.playlist_play_next_toast_one)
+                    val playNextManyFmt = stringResource(R.string.playlist_play_next_toast_other)
+                    PlayListOverflowSheet(
+                        isOpen = overflowSheetOpen,
+                        playList = activePlayList,
+                        onEdit = {
+                            // PRD §5.3: open the Edit Playlist modal.
+                            // Stubbed until the modal lands in a later commit.
+                        },
+                        onPlayNext = {
+                            // PRD FR-M-09: insert the playlist's
+                            // current songs right after the now-
+                            // playing track. Falls back to
+                            // setMediaItems when nothing is playing.
+                            scope.launch(Dispatchers.IO) {
+                                val urisInOrder = activePlayList.songDataList
+                                val songsInOrder = urisInOrder.mapNotNull { uri ->
+                                    musicList.firstOrNull { it.uri == uri }
+                                }
+                                if (songsInOrder.isEmpty()) return@launch
+                                withContext(Dispatchers.Main) {
+                                    val ctrl = MediaController.mediaControl
+                                    if (ctrl == null || ctrl.mediaItemCount == 0) {
+                                        // Nothing to insert after — start from the first.
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.prepare(songsInOrder.first(), songsInOrder)
+                                        }
+                                    } else {
+                                        val insertAt = ctrl.currentMediaItemIndex + 1
+                                        val mediaItems = songsInOrder.map { it.toMediaItem() }
+                                        ctrl.addMediaItems(insertAt, mediaItems)
+                                    }
+                                    val msg = if (songsInOrder.size == 1) playNextOneFmt
+                                        else playNextManyFmt.format(songsInOrder.size)
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        onDelete = {
+                            // PRD FR-M-10: optimistic delete + undo
+                            // snackbar. Wired with a simple Toast
+                            // here pending the snackbar host (next
+                            // commit). The deletion itself happens
+                            // immediately and the page pops back.
+                            val toRestore = activePlayList
+                            val originalIndex = playList.indexOfFirst { it.listID == toRestore.listID }
+                            PlayListLibrary.remove(toRestore)
+                            // Stash for the upcoming snackbar host;
+                            // for now, we just pop back.
+                            PendingPlayListDeletion.stash(toRestore, originalIndex)
+                            navController.popBackStack()
+                        },
+                    )
                 }
 
                 Title(
@@ -177,7 +273,11 @@ fun NormalMusic(navController: NavController) {
                             },
                             icon = Icons.Rounded.MoreHoriz,
                             onBack = {
-                                expanded.value = true
+                                if (activePlayList != null) {
+                                    overflowSheetOpen.value = true
+                                } else {
+                                    expanded.value = true
+                                }
                             }
                         )
                     }
@@ -298,6 +398,25 @@ private fun List<YosMediaItem>.sortX() =
             it
         }
     }
+
+/**
+ * Apply the playlist view's chosen sort (PRD FR-M-05). Manual leaves
+ * the order as-is — the caller already constructed [this] in the
+ * playlist's saved order (via [convertToSongList]). Other sort modes
+ * project to a string key (Pinyin-aware for title/artist) and apply
+ * the descending toggle.
+ */
+private fun List<YosMediaItem>.sortForPlaylist(): List<YosMediaItem> {
+    val sorted = when (PlayListSortPreference.sort) {
+        PlayListSort.Manual -> return if (PlayListSortPreference.descending) reversed() else this
+        PlayListSort.Title -> sortedBy { Pinyin.toPinyin((it.title ?: defaultTitle)[0]) }
+        PlayListSort.Artist -> sortedBy {
+            Pinyin.toPinyin(((it.artistsList ?: defaultArtists).first())[0])
+        }
+        PlayListSort.RecentlyAdded -> sortedBy { it.modifiedDate ?: 0L }
+    }
+    return if (PlayListSortPreference.descending) sorted.reversed() else sorted
+}
 
 @Composable
 fun FloatingMenu(
