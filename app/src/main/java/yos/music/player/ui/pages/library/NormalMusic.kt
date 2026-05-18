@@ -11,6 +11,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,9 +45,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -571,6 +574,52 @@ fun NormalMusic(navController: NavController) {
                             }
                         }
 
+                        item("Options") {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp)
+                                    .padding(top = 12.dp, bottom = 15.dp)
+                            ) {
+                                NormalTopButton(
+                                    icon = painterResource(id = R.drawable.button_icon_play),
+                                    label = stringResource(id = R.string.normal_button_play),
+                                    enabled = list.value.isNotEmpty(),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (list.value.isEmpty()) {
+                                        return@NormalTopButton
+                                    }
+
+                                    scope.launch(Dispatchers.IO) {
+                                        MediaController.prepare(
+                                            list.value.first(),
+                                            list.value
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(15.dp))
+                                NormalTopButton(
+                                    icon = painterResource(id = R.drawable.button_icon_shuffle),
+                                    label = stringResource(id = R.string.normal_button_shuffle),
+                                    enabled = list.value.isNotEmpty(),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (list.value.isEmpty()) {
+                                        return@NormalTopButton
+                                    }
+
+                                    MediaController.mediaControl?.shuffleModeEnabled = true
+                                    scope.launch(Dispatchers.IO) {
+                                        MediaController.prepare(
+                                            list.value.random(),
+                                            list.value
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         itemsIndexed(
                             list.value,
                             key = { index, music -> "$index:${music.uri}" },
@@ -639,6 +688,45 @@ private fun List<YosMediaItem>.sortForPlaylist(): List<YosMediaItem> {
         PlayListSort.RecentlyAdded -> sortedBy { it.modifiedDate ?: 0L }
     }
     return if (PlayListSortPreference.descending) sorted.reversed() else sorted
+}
+
+@Composable
+private fun NormalTopButton(
+    icon: Painter,
+    label: String,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(10.dp)
+
+    Row(
+        modifier = modifier
+            .background(
+                color = (Color.LightGray withNight Color.DarkGray).copy(alpha = 0.25f),
+                shape = shape,
+            )
+            .clip(shape)
+            .alpha(if (enabled) 1f else 0.45f)
+            .clickable(enabled = enabled, onClick = onClick)
+            .height(44.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            painter = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium,
+            fontSize = 17.sp,
+        )
+    }
 }
 
 @Composable
