@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
@@ -234,22 +233,8 @@ fun NormalMusic(navController: NavController) {
             val overflowSheetOpen = remember { mutableStateOf(false) }
             val editModalOpen = remember { mutableStateOf(false) }
 
-            // PRD §5.1 FR-S-01/02: pull-to-reveal search. The
-            // playlist item ordering is:
-            //   0: title (Title widget's big-text header)
-            //   1: SearchField  ← hidden above the viewport on entry
-            //   2: PlayListHeader (cover + description)
-            //   3: Options (Play / Shuffle row)
-            //   4..: songs
-            // scrollToItem(2) lifts the cover header to the top,
-            // pushing the title text and search field above the
-            // viewport. The user pulls down to reveal them.
-            val playlistListState = if (activePlayList != null) rememberLazyListState() else null
-            if (activePlayList != null && playlistListState != null) {
-                LaunchedEffect(activePlayList.listID) {
-                    playlistListState.scrollToItem(2)
-                }
-            }
+            // Playlist detail layout — search bar is always visible
+            // at the top of the scroll content; no pull-to-reveal.
 
             Box(Modifier.fillMaxSize()) {
                 if (activePlayList == null) {
@@ -373,7 +358,6 @@ fun NormalMusic(navController: NavController) {
                             }
                         )
                     },
-                    listState = playlistListState,
                 ) {
                     item("SearchField") {
                         val keyboardController = LocalSoftwareKeyboardController.current
@@ -428,13 +412,13 @@ fun NormalMusic(navController: NavController) {
                             }
                         }
                     }
-                    if (activePlayList != null) {
-                        // PRD §5.3 follow-up: cover + description are
-                        // the playlist's identity on the detail page.
-                        // Rendered between the (hidden) search field
-                        // and the Play/Shuffle buttons; visible by
-                        // default thanks to scrollToItem(2) anchoring
-                        // it at the top.
+                    if (activePlayList != null && searchText.value.isEmpty())
+                    {
+                        // Cover + description appear above Play /
+                        // Shuffle. Hidden while a search query is
+                        // active so the results list is unobstructed
+                        // and returns automatically when the query
+                        // is cleared or the page is reopened.
                         item("PlayListHeader") {
                             PlayListDetailHeader(playList = activePlayList)
                         }

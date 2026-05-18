@@ -1043,15 +1043,24 @@ class MainActivity : BaseActivity() {
                             }
                         }
 
-                        // PRD FR-M-10: activity-level host for the
-                        // playlist delete-undo snackbar. Mounted here
-                        // (instead of inside PlayLists) so the 5s
-                        // undo window survives navigation: the user
-                        // can leave Library while the timer is running
-                        // and the snackbar stays visible above the
-                        // mini-player until they tap Undo or it
-                        // auto-dismisses.
-                        yos.music.player.ui.pages.library.playlists.UndoSnackbarHost()
+                        // Activity-level host for the playlist
+                        // delete-undo snackbar. Mounted here so the
+                        // 5s undo window survives navigation: the
+                        // user can leave Library while the timer
+                        // is running and the snackbar stays visible
+                        // above the mini-player until they tap Undo
+                        // or it auto-dismisses. Wrapped in a
+                        // fullscreen Box anchored to BottomCenter so
+                        // the inner Row sits at the bottom of the
+                        // screen, padded above the mini-player.
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            yos.music.player.ui.pages.library.playlists.UndoSnackbarHost(
+                                bottomOffset = miniPlayerHeight,
+                            )
+                        }
                     /*}*/
                 }
             }
