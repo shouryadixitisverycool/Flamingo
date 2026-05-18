@@ -66,10 +66,14 @@
     <string name="crash_copy_brief">复制简略信息</string>
     <string name="crash_restart_app">重启软件</string>
     <string name="page_library_search_album">在专辑中搜索</string>
+    <string name="page_library_search_album_tracks">在专辑内搜索</string>
     <string name="page_library_albums">专辑</string>
     <string name="page_library_album_desc">%d 首</string>
     <string name="tip_no_album_info">未找到专辑。</string>
     <string name="page_library_album_info_title">专辑信息</string>
+    <string name="album_sort_track_number">曲目编号</string>
+    <string name="album_action_favorite">收藏专辑</string>
+    <string name="album_action_unfavorite">取消收藏专辑</string>
     <string name="normal_button_play">播放</string>
     <string name="normal_button_shuffle">随机播放</string>
     <string name="page_library_album_info_others">%1$d 首歌曲, 约 %2$d 分钟</string>

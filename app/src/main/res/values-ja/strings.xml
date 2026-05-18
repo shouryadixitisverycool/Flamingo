@@ -66,10 +66,14 @@
     <string name="crash_copy_brief">簡易情報をコピー</string>
     <string name="crash_restart_app">ソフトウェアを再起動</string>
     <string name="page_library_search_album">アルバム内を検索</string>
+    <string name="page_library_search_album_tracks">アルバム内を検索</string>
     <string name="page_library_albums">アルバム</string>
     <string name="page_library_album_desc">%d 曲</string>
     <string name="tip_no_album_info">アルバムが見つかりませんでした。</string>
     <string name="page_library_album_info_title">アルバム情報</string>
+    <string name="album_sort_track_number">トラック番号</string>
+    <string name="album_action_favorite">アルバムをお気に入り</string>
+    <string name="album_action_unfavorite">アルバムをお気に入りから削除</string>
     <string name="normal_button_play">再生</string>
     <string name="normal_button_shuffle">シャッフル</string>
     <string name="page_library_album_info_others">%1$d 曲, 約 %2$d 分</string>

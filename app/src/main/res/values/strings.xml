@@ -66,10 +66,14 @@
     <string name="crash_copy_brief">Copy Brief Information</string>
     <string name="crash_restart_app">Restart App</string>
     <string name="page_library_search_album">Search in Albums</string>
+    <string name="page_library_search_album_tracks">Search in Album</string>
     <string name="page_library_albums">Albums</string>
     <string name="page_library_album_desc">%d Songs</string>
     <string name="tip_no_album_info">No albums found.</string>
     <string name="page_library_album_info_title">Album Information</string>
+    <string name="album_sort_track_number">Track Number</string>
+    <string name="album_action_favorite">Favorite album</string>
+    <string name="album_action_unfavorite">Remove album from favorites</string>
     <string name="normal_button_play">Play</string>
     <string name="normal_button_shuffle">Shuffle</string>
     <string name="page_library_album_info_others">%1$d Songs, about %2$d minutes</string>
