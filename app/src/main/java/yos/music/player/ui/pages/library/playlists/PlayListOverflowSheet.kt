@@ -146,6 +146,21 @@ fun PlayListOverflowSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlayListSortSheet(isOpen: MutableState<Boolean>) {
+    if (!isOpen.value) return
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    YosBottomSheetDialog(
+        bottomSheetState = sheetState,
+        onDismissRequest = { isOpen.value = false },
+    ) {
+        PlayListSortBody(onBack = { isOpen.value = false })
+    }
+}
+
 @Composable
 private fun OverflowMenuBody(
     snapshot: PlayList,

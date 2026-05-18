@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
@@ -51,12 +52,15 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.ContentScale
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,12 +86,12 @@ import yos.music.player.data.libraries.artistsList
 import yos.music.player.data.libraries.defaultArtists
 import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.objects.LibraryObject
-import yos.music.player.ui.pages.library.albums.NormalButton
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
 import yos.music.player.ui.pages.library.playlists.PlayListEditModal
 import yos.music.player.ui.pages.library.playlists.PlayListOverflowSheet
 import yos.music.player.ui.pages.library.playlists.PlayListSearch
+import yos.music.player.ui.pages.library.playlists.PlayListSortSheet
 import yos.music.player.ui.pages.library.playlists.PlayListSort
 import yos.music.player.ui.pages.library.playlists.PlayListSortPreference
 import yos.music.player.ui.theme.withNight
@@ -133,16 +137,13 @@ fun NormalMusic(navController: NavController) {
             mutableStateOf("")
         }
 
-        val showMusic = remember("NormalMusic_showMusic") {
+        val showMusic = remember("NormalMusic_showMusic", activePlayList, musicList) {
             derivedStateOf {
-                musicList.isEmpty()
+                activePlayList == null && musicList.isEmpty()
             }
         }
         if (showMusic.value) {
-            val message =
-                if (musicList == null) stringResource(id = R.string.tip_scanning) else stringResource(
-                    id = R.string.tip_no_song
-                )
+            val message = stringResource(id = R.string.tip_no_song)
             Title(
                 title = pageInfo.first, onBack = {
                     navController.popBackStack()
@@ -232,6 +233,11 @@ fun NormalMusic(navController: NavController) {
             // (which remains the right surface for Songs / Album / etc.).
             val overflowSheetOpen = remember { mutableStateOf(false) }
             val editModalOpen = remember { mutableStateOf(false) }
+            val sortSheetOpen = remember { mutableStateOf(false) }
+            val playListListState = rememberLazyListState()
+            val playListSearchVisible = remember(activePlayList?.listID) {
+                mutableStateOf(false)
+            }
 
             // Playlist detail layout — search bar is always visible
             // at the top of the scroll content; no pull-to-reveal.
@@ -247,6 +253,13 @@ fun NormalMusic(navController: NavController) {
                     val context = LocalContext.current
                     val playNextOneFmt = stringResource(R.string.playlist_play_next_toast_one)
                     val playNextManyFmt = stringResource(R.string.playlist_play_next_toast_other)
+                    val songCount = remember(musicList) {
+                        musicList.size
+                    }
+                    val totalMinutes = remember(musicList) {
+                        musicList.sumOf { it.duration } / 60000
+                    }
+
                     PlayListOverflowSheet(
                         isOpen = overflowSheetOpen,
                         playList = activePlayList,
@@ -331,173 +344,249 @@ fun NormalMusic(navController: NavController) {
                         },
                     )
 
+                    PlayListSortSheet(isOpen = sortSheetOpen)
+
                     PlayListEditModal(
                         isOpen = editModalOpen,
                         source = activePlayList,
                     )
+
+                    MusicDetailPage(
+                        title = activePlayList.name,
+                        listState = playListListState,
+                        searchText = searchText.value,
+                        searchPlaceholder = stringResource(id = R.string.playlist_search_placeholder),
+                        showSearch = playListSearchVisible.value || searchText.value.isNotEmpty(),
+                        onBack = {
+                            navController.popBackStack()
+                        },
+                        onSort = {
+                            sortSheetOpen.value = true
+                        },
+                        onSearchTextChange = {
+                            searchText.value = it
+                        },
+                        onSearchToggle = {
+                            val newVisibility = !(playListSearchVisible.value || searchText.value.isNotEmpty())
+                            playListSearchVisible.value = newVisibility
+                            if (newVisibility) {
+                                scope.launch {
+                                    playListListState.animateScrollToItem(1)
+                                }
+                            } else {
+                                searchText.value = ""
+                            }
+                        },
+                        artwork = {
+                            PlayListHeroArtwork(playList = activePlayList)
+                        },
+                        headerContent = {
+                            Text(
+                                text = activePlayList.name,
+                                color = Color.White,
+                                fontSize = 31.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 36.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = stringResource(
+                                    id = R.string.page_library_album_info_others,
+                                    songCount,
+                                    totalMinutes,
+                                ),
+                                color = Color.White.copy(alpha = 0.72f),
+                                fontSize = 14.5.sp,
+                                lineHeight = 20.sp,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+
+                            if (!activePlayList.description.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                Text(
+                                    text = activePlayList.description,
+                                    color = Color.White.copy(alpha = 0.68f),
+                                    fontSize = 14.5.sp,
+                                    lineHeight = 20.sp,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        actionContent = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp),
+                            ) {
+                                MusicDetailCircleButton(
+                                    painter = painterResource(id = R.drawable.button_icon_shuffle),
+                                    contentDescription = stringResource(id = R.string.normal_button_shuffle),
+                                    enabled = list.value.isNotEmpty(),
+                                    onClick = {
+                                        if (list.value.isEmpty()) return@MusicDetailCircleButton
+
+                                        MediaController.mediaControl?.shuffleModeEnabled = true
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.prepare(list.value.random(), list.value)
+                                        }
+                                    },
+                                )
+
+                                MusicDetailActionPill(modifier = Modifier.weight(1f)) {
+                                    MusicDetailPillButton(
+                                        painter = painterResource(id = R.drawable.ic_action_edit),
+                                        contentDescription = stringResource(id = R.string.playlist_overflow_edit),
+                                        onClick = {
+                                            editModalOpen.value = true
+                                        },
+                                    )
+
+                                    MusicDetailPillDivider()
+
+                                    MusicDetailPillButton(
+                                        painter = painterResource(id = R.drawable.ic_nowplaying_more),
+                                        contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                                        onClick = {
+                                            overflowSheetOpen.value = true
+                                        },
+                                    )
+                                }
+
+                                MusicDetailCircleButton(
+                                    painter = painterResource(id = R.drawable.button_icon_play),
+                                    contentDescription = stringResource(id = R.string.normal_button_play),
+                                    enabled = list.value.isNotEmpty(),
+                                    accent = true,
+                                    onClick = {
+                                        if (list.value.isEmpty()) return@MusicDetailCircleButton
+
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.prepare(list.value.first(), list.value)
+                                        }
+                                    },
+                                )
+                            }
+                        },
+                    ) {
+                        if (list.value.isEmpty()) {
+                            item("PlayListEmpty") {
+                                val emptyMessage = if (musicList.isEmpty()) {
+                                    stringResource(id = R.string.playlist_unavailable_desc)
+                                } else {
+                                    stringResource(id = R.string.tip_no_song)
+                                }
+
+                                Text(
+                                    text = emptyMessage,
+                                    fontSize = 15.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                                        .alpha(0.55f),
+                                )
+                            }
+                        } else {
+                            itemsIndexed(
+                                list.value,
+                                key = { index, music -> "$index:${music.uri}" },
+                            ) { index, music ->
+                                MusicList(music = music) {
+                                    scope.launch(Dispatchers.IO) {
+                                        MediaController.prepare(music, list.value)
+                                    }
+                                }
+
+                                if (index < list.value.lastIndex) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 88.dp)
+                                            .alpha(0.15f)
+                                            .height(0.5.dp)
+                                            .background(Color.Black withNight Color.White),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
-                Title(
-                    title = pageInfo.first, onBack = {
-                        navController.popBackStack()
-                    },
-                    rightBarIcon = {
-                        TitleBarIcon(
-                            modifier = Modifier.onGloballyPositioned {
-                                if (buttonPosition.value.y == 0f) {
-                                    buttonPosition.value = it.localToRoot(Offset.Zero)
-                                }
-                            },
-                            icon = Icons.Rounded.MoreHoriz,
-                            onBack = {
-                                if (activePlayList != null) {
-                                    overflowSheetOpen.value = true
-                                } else {
-                                    expanded.value = true
-                                }
-                            }
-                        )
-                    },
-                ) {
-                    item("SearchField") {
-                        val keyboardController = LocalSoftwareKeyboardController.current
-                        val placeholder = if (activePlayList != null) {
-                            stringResource(id = R.string.playlist_search_placeholder)
-                        } else {
-                            stringResource(id = R.string.page_library_search_songs)
-                        }
-
-                        // FR-S-04: trailing X to clear text (playlist only).
-                        // For non-playlist views we keep the original
-                        // baseline appearance.
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp)
-                                .padding(top = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            SearchTextField(
-                                text = searchText.value,
-                                placeholder = placeholder,
-                                onValueChange = { searchText.value = it },
-                                modifier = Modifier.weight(1f),
-                                onSearch = {
-                                    if (searchText.value.isNotEmpty()) {
-                                        keyboardController?.hide()
+                if (activePlayList == null) {
+                    Title(
+                        title = pageInfo.first,
+                        onBack = {
+                            navController.popBackStack()
+                        },
+                        rightBarIcon = {
+                            TitleBarIcon(
+                                modifier = Modifier.onGloballyPositioned {
+                                    if (buttonPosition.value.y == 0f) {
+                                        buttonPosition.value = it.localToRoot(Offset.Zero)
                                     }
                                 },
+                                icon = Icons.Rounded.MoreHoriz,
+                                onBack = {
+                                    expanded.value = true
+                                },
                             )
-                            if (activePlayList != null && searchText.value.isNotEmpty()) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null,
-                                            onClick = { searchText.value = "" },
-                                        ),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_action_close),
-                                        contentDescription = stringResource(R.string.playlist_search_clear_cd),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .alpha(0.55f),
-                                        tint = MaterialTheme.colorScheme.onBackground,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    if (activePlayList != null && searchText.value.isEmpty())
-                    {
-                        // Cover + description appear above Play /
-                        // Shuffle. Hidden while a search query is
-                        // active so the results list is unobstructed
-                        // and returns automatically when the query
-                        // is cleared or the page is reopened.
-                        item("PlayListHeader") {
-                            PlayListDetailHeader(playList = activePlayList)
-                        }
-                    }
-                    item("Options") {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp)
-                                .padding(top = 12.dp, bottom = 15.dp)
-                        ) {
-                            NormalButton(
-                                icon = painterResource(id = R.drawable.button_icon_play),
-                                label = stringResource(id = R.string.normal_button_play),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                scope.launch(Dispatchers.IO) {
-                                    MediaController.prepare(
-                                        list.value.first(),
-                                        list.value
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(15.dp))
-                            NormalButton(
-                                icon = painterResource(id = R.drawable.button_icon_shuffle),
-                                label = stringResource(id = R.string.normal_button_shuffle),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                MediaController.mediaControl?.shuffleModeEnabled = true
-                                scope.launch(Dispatchers.IO) {
-                                    MediaController.prepare(
-                                        list.value.random(),
-                                        list.value
-                                    )
-                                }
-                            }
-                        }
-                    }
+                        },
+                    ) {
+                        item("SearchField") {
+                            val keyboardController = LocalSoftwareKeyboardController.current
 
-                    itemsIndexed(
-                        list.value,
-                        // PRD FR-E-13: playlists may contain the same
-                        // song multiple times, so the YosMediaItem
-                        // alone is no longer unique. Composite key of
-                        // (index, uri) keeps each row distinguishable
-                        // while still letting Compose reuse subcompositions
-                        // when the list reorders without inserts.
-                        key = { index, music -> "$index:${music.uri}" }
-                    ) { index, music ->
-                        MusicList(
-                            music
-                        ) {
-                            scope.launch(Dispatchers.IO) {
-                                MediaController.prepare(
-                                    music,
-                                    list.value
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp)
+                                    .padding(top = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                SearchTextField(
+                                    text = searchText.value,
+                                    placeholder = stringResource(id = R.string.page_library_search_songs),
+                                    onValueChange = { searchText.value = it },
+                                    modifier = Modifier.weight(1f),
+                                    onSearch = {
+                                        if (searchText.value.isNotEmpty()) {
+                                            keyboardController?.hide()
+                                        }
+                                    },
                                 )
                             }
                         }
 
-                        key(index) {
-                            val needDivider = index < musicList.size - 1
-                            if (needDivider) {
+                        itemsIndexed(
+                            list.value,
+                            key = { index, music -> "$index:${music.uri}" },
+                        ) { index, music ->
+                            MusicList(music = music) {
+                                scope.launch(Dispatchers.IO) {
+                                    MediaController.prepare(music, list.value)
+                                }
+                            }
+
+                            if (index < list.value.lastIndex) {
                                 Spacer(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(start = 88.dp)
                                         .alpha(0.15f)
                                         .height(0.5.dp)
-                                        .background(Color.Black withNight Color.White)
+                                        .background(Color.Black withNight Color.White),
                                 )
                             }
                         }
                     }
-
-                    /*item("blank") {
-                    Spacer(modifier = Modifier.navigationBarsHeight(15.dp))
-                }*/
                 }
             }
         }
@@ -743,82 +832,57 @@ fun FloatingMenuDivider() =
     )
 
 /**
- * Playlist detail page header: large rounded cover + (optional)
- * description. Mirrors the Apple Music reference (big square cover
- * centered; description shown beneath when present).
- *
- * Cover resolution order (PRD FR-E-03, FR-E-05):
- *   1. The custom photo URI the user picked in Edit Playlist.
- *   2. A 2×2 auto-collage of the first 4 unique album arts.
- *   3. The default star placeholder when the playlist is empty.
+ * Shared playlist hero artwork used by the new reusable detail page.
+ * Custom cover wins, otherwise the auto-generated collage is used,
+ * and empty playlists fall back to the default placeholder.
  */
 @Composable
-private fun PlayListDetailHeader(playList: PlayList) {
+private fun PlayListHeroArtwork(playList: PlayList) {
     val context = LocalContext.current
-    val shape = YosRoundedCornerShape(16.dp)
-    val density = LocalDensity.current
+    val shape = YosRoundedCornerShape(18.dp)
 
-    // Resolve the playlist's songs to YosMediaItem for the
-    // auto-collage path; only needed when no custom cover is set.
     val songsInPlaylist = remember(playList.songDataList) {
         playList.songDataList.mapNotNull { uri ->
             yos.music.player.data.libraries.MusicLibrary.songs.firstOrNull { it.uri == uri }
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(top = 8.dp, bottom = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .fillMaxSize()
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+                clip = true
+                this.shape = shape
+            },
     ) {
-        Box(
-            modifier = Modifier
-                .size(260.dp)
-                .graphicsLayer {
-                    compositingStrategy = CompositingStrategy.Offscreen
-                    clip = true
-                    this.shape = shape
-                },
-        ) {
-            when {
-                !playList.coverUri.isNullOrBlank() -> {
-                    coil.compose.AsyncImage(
-                        model = coil.request.ImageRequest.Builder(context)
-                            .data(playList.coverUri)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-                songsInPlaylist.isEmpty() -> {
-                    androidx.compose.foundation.Image(
-                        painter = painterResource(id = R.drawable.placeholder_playlist_default),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-                else -> {
-                    yos.music.player.ui.pages.library.playlists.PlayListAutoCover(
-                        songs = songsInPlaylist,
-                    )
-                }
+        when {
+            !playList.coverUri.isNullOrBlank() -> {
+                coil.compose.AsyncImage(
+                    model = coil.request.ImageRequest.Builder(context)
+                        .data(playList.coverUri)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
             }
-        }
 
-        if (!playList.description.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = playList.description,
-                fontSize = 14.5.sp,
-                lineHeight = 19.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .alpha(0.7f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+            songsInPlaylist.isEmpty() -> {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(id = R.drawable.placeholder_playlist_default),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+
+            else -> {
+                yos.music.player.ui.pages.library.playlists.PlayListAutoCover(
+                    songs = songsInPlaylist,
+                )
+            }
         }
     }
 }
