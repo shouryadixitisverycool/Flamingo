@@ -107,6 +107,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import uk.akane.libphonograph.hasScopedStorageWithMediaTypes
 import yos.music.player.code.MediaController
+import yos.music.player.code.SystemMediaControlResolver
 import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.code.utils.player.FadeExo.fadePause
 import yos.music.player.code.utils.player.FadeExo.fadePlay
@@ -793,6 +794,65 @@ class MainActivity : BaseActivity() {
                                             rememberSaveable(key = "MainActivity_isPlaying") {
                                                 MediaViewModelObject.isPlaying
                                             }
+                                        val miniPlayerTrack = MediaController.musicPlaying.value
+                                        val miniPlayerTrackKey =
+                                            miniPlayerTrack?.mediaId ?: miniPlayerTrack?.uri?.toString()
+                                            ?: ""
+                                        val systemMediaControlResolver = remember(context) {
+                                            SystemMediaControlResolver(context)
+                                        }
+                                        val miniPlayerWidth = remember("MainActivity_miniPlayerWidth") {
+                                            mutableIntStateOf(0)
+                                        }
+                                        val miniPlayerHorizontalOffset =
+                                            remember("MainActivity_miniPlayerHorizontalOffset") {
+                                                Animatable(0f)
+                                            }
+                                        val miniPlayerHorizontalActionDirection =
+                                            remember("MainActivity_miniPlayerHorizontalActionDirection") {
+                                                mutableIntStateOf(0)
+                                            }
+                                        val miniPlayerHorizontalState = rememberDraggableState { delta ->
+                                            if (
+                                                yosBottomSheetConfig.menuAlpha != 1f ||
+                                                miniPlayerHorizontalActionDirection.intValue != 0
+                                            ) {
+                                                return@rememberDraggableState
+                                            }
+
+                                            val maxOffset =
+                                                (miniPlayerWidth.intValue * 0.35f).coerceAtLeast(1f)
+
+                                            scope.launch {
+                                                miniPlayerHorizontalOffset.snapTo(
+                                                    (miniPlayerHorizontalOffset.value + delta).coerceIn(
+                                                        -maxOffset,
+                                                        maxOffset
+                                                    )
+                                                )
+                                            }
+                                        }
+
+                                        LaunchedEffect(miniPlayerTrackKey) {
+                                            if (miniPlayerHorizontalActionDirection.intValue == 0) {
+                                                return@LaunchedEffect
+                                            }
+
+                                            val widthPx =
+                                                miniPlayerWidth.intValue.toFloat().coerceAtLeast(1f)
+
+                                            miniPlayerHorizontalOffset.snapTo(
+                                                -miniPlayerHorizontalActionDirection.intValue * widthPx
+                                            )
+                                            miniPlayerHorizontalOffset.animateTo(
+                                                0f,
+                                                animationSpec = tween(
+                                                    durationMillis = 65,
+                                                    easing = EaseOutQuart
+                                                )
+                                            )
+                                            miniPlayerHorizontalActionDirection.intValue = 0
+                                        }
 
                                         // NowPlaying
                                         YosWrapper {
@@ -880,156 +940,268 @@ class MainActivity : BaseActivity() {
                                                                 }
                                                             }
 
-                                                            Row(
-                                                                Modifier
-                                                                    .height(miniPlayerHeight)
-                                                                    .fillMaxWidth()
-                                                                    .padding(
-                                                                        horizontal = 8.dp
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .fillMaxSize()
+                                                                    .onSizeChanged {
+                                                                        miniPlayerWidth.intValue = it.width
+                                                                    }
+                                                                    .draggable(
+                                                                        orientation = Orientation.Horizontal,
+                                                                        state = miniPlayerHorizontalState,
+                                                                        enabled = yosBottomSheetConfig.menuAlpha == 1f,
+                                                                        onDragStopped = { velocity ->
+                                                                            scope.launch {
+                                                                                val widthPx =
+                                                                                    miniPlayerWidth.intValue.toFloat()
+                                                                                        .coerceAtLeast(1f)
+                                                                                val threshold = widthPx * 0.18f
+                                                                                val velocityThreshold = 1400f
+                                                                                val dragOffset =
+                                                                                    miniPlayerHorizontalOffset.value
+                                                                                val shouldTrigger =
+                                                                                    abs(dragOffset) > threshold || abs(
+                                                                                        velocity
+                                                                                    ) > velocityThreshold
+
+                                                                                if (!shouldTrigger || miniPlayerTrack == null) {
+                                                                                    miniPlayerHorizontalOffset.animateTo(
+                                                                                        0f,
+                                                                                        animationSpec = tween(
+                                                                                            durationMillis = 55,
+                                                                                            easing = EaseOutQuart
+                                                                                        )
+                                                                                    )
+                                                                                    return@launch
+                                                                                }
+
+                                                                                val actionDirection =
+                                                                                    if (abs(velocity) > velocityThreshold) {
+                                                                                        if (velocity < 0f) {
+                                                                                            -1
+                                                                                        } else {
+                                                                                            1
+                                                                                        }
+                                                                                    } else if (dragOffset < 0f) {
+                                                                                        -1
+                                                                                    } else {
+                                                                                        1
+                                                                                    }
+                                                                                val mediaControl =
+                                                                                    MediaController.mediaControl
+                                                                                val canSkip =
+                                                                                    if (actionDirection < 0) {
+                                                                                        mediaControl?.hasNextMediaItem() == true
+                                                                                    } else {
+                                                                                        mediaControl?.hasPreviousMediaItem() == true
+                                                                                    }
+
+                                                                                if (!canSkip) {
+                                                                                    miniPlayerHorizontalOffset.animateTo(
+                                                                                        0f,
+                                                                                        animationSpec = tween(
+                                                                                            durationMillis = 55,
+                                                                                            easing = EaseOutQuart
+                                                                                        )
+                                                                                    )
+                                                                                    return@launch
+                                                                                }
+
+                                                                                miniPlayerHorizontalActionDirection.intValue =
+                                                                                    actionDirection
+                                                                                miniPlayerHorizontalOffset.animateTo(
+                                                                                    actionDirection * widthPx,
+                                                                                    animationSpec = tween(
+                                                                                        durationMillis = 45,
+                                                                                        easing = EaseOutQuart
+                                                                                    )
+                                                                                )
+
+                                                                                if (actionDirection < 0) {
+                                                                                    mediaControl?.seekToNextMediaItem()
+                                                                                } else {
+                                                                                    mediaControl?.seekToPreviousMediaItem()
+                                                                                }
+                                                                            }
+                                                                        }
                                                                     )
+                                                                    .graphicsLayer {
+                                                                        clip = true
+                                                                    }
                                                             ) {
                                                                 Row(
                                                                     Modifier
-                                                                        .height(
-                                                                            miniPlayerHeight
+                                                                        .height(miniPlayerHeight)
+                                                                        .fillMaxWidth()
+                                                                        .padding(
+                                                                            horizontal = 8.dp
                                                                         )
-                                                                        .weight(1f),
-                                                                    verticalAlignment = Alignment.CenterVertically
                                                                 ) {
-                                                                    YosWrapper {
-                                                                        ShadowImageWithCache(
-                                                                            dataLambda = { MediaViewModelObject.bitmap.value },
-                                                                            contentDescription = null,
-                                                                            modifier = Modifier
-                                                                                .size(47.dp),
-                                                                            cornerRadius = 6.dp,
-                                                                            shadowAlpha = 0f,
-                                                                            imageQuality = ImageQuality.LOW
-                                                                        )
-                                                                    }
-                                                                    Column(
+                                                                    Row(
                                                                         Modifier
-                                                                            .padding(
-                                                                                start = 10.dp,
-                                                                                end = 5.dp
+                                                                            .height(
+                                                                                miniPlayerHeight
                                                                             )
+                                                                            .weight(1f),
+                                                                        verticalAlignment = Alignment.CenterVertically
                                                                     ) {
-                                                                        Text(
-                                                                            text = MediaController.musicPlaying.value?.title
-                                                                                ?: defaultTitle,
-                                                                            fontWeight = FontWeight.Medium,
-                                                                            fontSize = 16.sp,
-                                                                            lineHeight = 16.sp,
-                                                                            maxLines = 1,
-                                                                            overflow = TextOverflow.Ellipsis,
-                                                                            color = Color.Black withNight Color.White
-                                                                        )
-                                                                        /*Text(
-                                                                text = musicPlaying.value?.Artist
-                                                                    ?: "未知艺术家",
-                                                                fontSize = 13.5.sp,
-                                                                lineHeight = 13.5.sp,
-                                                                modifier = Modifier.alpha(
-                                                                    0.6f
-                                                                ),
-                                                                maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis,
-                                                                color = Color.Black withNight Color.White
-                                                            )*/
-                                                                    }
-                                                                }
-                                                                Row(
-                                                                    Modifier
-                                                                        .fillMaxHeight()
-                                                                        .padding(end = 10.dp),
-                                                                    verticalAlignment = Alignment.CenterVertically
-                                                                ) {
-                                                                    Box(
-                                                                        modifier = Modifier
-                                                                            .size(34.dp)
-                                                                            .clickable(
-                                                                                interactionSource = remember { MutableInteractionSource() },
-                                                                                indication = ripple(
-                                                                                    bounded = false
-                                                                                ),
-                                                                                onClick = {
-                                                                                    Vibrator.click(
-                                                                                        context
-                                                                                    )
-                                                                                    isPlaying.value =
-                                                                                        !isPlaying.value
-                                                                                    if (isPlaying.value) {
-                                                                                        MediaController.mediaControl?.fadePlay()
-                                                                                    } else {
-                                                                                        MediaController.mediaControl?.fadePause()
-                                                                                    }
-                                                                                }),
-                                                                        contentAlignment = Alignment.Center
-                                                                    ) {
-                                                                        AnimatedContent(
-                                                                            targetState = isPlaying.value,
-                                                                            transitionSpec = {
-                                                                                (scaleIn(
-                                                                                    initialScale = 0.3f
-                                                                                ) + fadeIn()).togetherWith(
-                                                                                    scaleOut(
-                                                                                        targetScale = 0.3f
-                                                                                    ) + fadeOut()
+                                                                        YosWrapper {
+                                                                            ShadowImageWithCache(
+                                                                                dataLambda = { MediaViewModelObject.bitmap.value },
+                                                                                contentDescription = null,
+                                                                                modifier = Modifier
+                                                                                    .size(47.dp),
+                                                                                cornerRadius = 6.dp,
+                                                                                shadowAlpha = 0f,
+                                                                                imageQuality = ImageQuality.LOW
+                                                                            )
+                                                                        }
+                                                                        Box(
+                                                                            Modifier
+                                                                                .weight(1f)
+                                                                                .padding(
+                                                                                    start = 10.dp,
+                                                                                    end = 5.dp
                                                                                 )
-                                                                            }) {
-                                                                            if (it) {
-                                                                                Icon(
-                                                                                    painterResource(
-                                                                                        id = R.drawable.ic_nowplaying_mp_pause
-                                                                                    ),
-                                                                                    contentDescription = "Pause",
-                                                                                    modifier = Modifier
-                                                                                        .fillMaxSize(),
-                                                                                    tint = Color.Black withNight Color.White
+                                                                                .graphicsLayer {
+                                                                                    clip = true
+                                                                                },
+                                                                            contentAlignment = Alignment.CenterStart
+                                                                        ) {
+                                                                            Column(
+                                                                                Modifier.graphicsLayer {
+                                                                                    val widthPx =
+                                                                                        miniPlayerWidth.intValue.toFloat()
+                                                                                            .coerceAtLeast(1f)
+
+                                                                                    translationX =
+                                                                                        miniPlayerHorizontalOffset.value
+                                                                                    alpha =
+                                                                                        1f - (
+                                                                                            abs(
+                                                                                                miniPlayerHorizontalOffset.value
+                                                                                            ) / widthPx
+                                                                                        ).coerceIn(0f, 0.35f)
+                                                                                }
+                                                                            ) {
+                                                                                Text(
+                                                                                    text = miniPlayerTrack?.title
+                                                                                        ?: defaultTitle,
+                                                                                    fontWeight = FontWeight.Medium,
+                                                                                    fontSize = 16.sp,
+                                                                                    lineHeight = 16.sp,
+                                                                                    maxLines = 1,
+                                                                                    overflow = TextOverflow.Ellipsis,
+                                                                                    color = Color.Black withNight Color.White
                                                                                 )
-                                                                            } else {
-                                                                                Icon(
-                                                                                    painterResource(
-                                                                                        id = R.drawable.ic_nowplaying_mp_play
-                                                                                    ),
-                                                                                    contentDescription = "Play",
-                                                                                    modifier = Modifier
-                                                                                        .fillMaxSize(),
-                                                                                    tint = Color.Black withNight Color.White
-                                                                                )
+                                                                                /*Text(
+                                                                     text = musicPlaying.value?.Artist
+                                                                         ?: "未知艺术家",
+                                                                     fontSize = 13.5.sp,
+                                                                     lineHeight = 13.5.sp,
+                                                                     modifier = Modifier.alpha(
+                                                                         0.6f
+                                                                     ),
+                                                                     maxLines = 1,
+                                                                     overflow = TextOverflow.Ellipsis,
+                                                                     color = Color.Black withNight Color.White
+                                                                 )*/
                                                                             }
                                                                         }
                                                                     }
-                                                                    Spacer(
-                                                                        modifier = Modifier.width(
-                                                                            18.dp
-                                                                        )
-                                                                    )
-                                                                    Box(
-                                                                        modifier = Modifier
-                                                                            .size(36.dp)
-                                                                            .clickable(
-                                                                                interactionSource = remember { MutableInteractionSource() },
-                                                                                indication = ripple(
-                                                                                    bounded = false
-                                                                                ),
-                                                                                onClick = {
-                                                                                    Vibrator.click(
-                                                                                        context
-                                                                                    )
-                                                                                    MediaController.mediaControl?.seekToNextMediaItem()
-                                                                                }),
-                                                                        contentAlignment = Alignment.Center
+                                                                    Row(
+                                                                        Modifier
+                                                                            .fillMaxHeight()
+                                                                            .padding(end = 10.dp),
+                                                                        verticalAlignment = Alignment.CenterVertically
                                                                     ) {
-                                                                        Icon(
-                                                                            painterResource(
-                                                                                id = R.drawable.ic_nowplaying_mp_fforward
-                                                                            ),
-                                                                            contentDescription = "Next",
+                                                                        Box(
                                                                             modifier = Modifier
-                                                                                .fillMaxSize(),
-                                                                            tint = Color.Black withNight Color.White
+                                                                                .size(34.dp)
+                                                                                .clickable(
+                                                                                    interactionSource = remember { MutableInteractionSource() },
+                                                                                    indication = ripple(
+                                                                                        bounded = false
+                                                                                    ),
+                                                                                    onClick = {
+                                                                                        Vibrator.click(
+                                                                                            context
+                                                                                        )
+                                                                                        isPlaying.value =
+                                                                                            !isPlaying.value
+                                                                                        if (isPlaying.value) {
+                                                                                            MediaController.mediaControl?.fadePlay()
+                                                                                        } else {
+                                                                                            MediaController.mediaControl?.fadePause()
+                                                                                        }
+                                                                                    }),
+                                                                            contentAlignment = Alignment.Center
+                                                                        ) {
+                                                                            AnimatedContent(
+                                                                                targetState = isPlaying.value,
+                                                                                transitionSpec = {
+                                                                                    (scaleIn(
+                                                                                        initialScale = 0.3f
+                                                                                    ) + fadeIn()).togetherWith(
+                                                                                        scaleOut(
+                                                                                            targetScale = 0.3f
+                                                                                        ) + fadeOut()
+                                                                                    )
+                                                                                }) {
+                                                                                if (it) {
+                                                                                    Icon(
+                                                                                        painterResource(
+                                                                                            id = R.drawable.ic_nowplaying_mp_pause
+                                                                                        ),
+                                                                                        contentDescription = "Pause",
+                                                                                        modifier = Modifier
+                                                                                            .fillMaxSize(),
+                                                                                        tint = Color.Black withNight Color.White
+                                                                                    )
+                                                                                } else {
+                                                                                    Icon(
+                                                                                        painterResource(
+                                                                                            id = R.drawable.ic_nowplaying_mp_play
+                                                                                        ),
+                                                                                        contentDescription = "Play",
+                                                                                        modifier = Modifier
+                                                                                            .fillMaxSize(),
+                                                                                        tint = Color.Black withNight Color.White
+                                                                                    )
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        Spacer(
+                                                                            modifier = Modifier.width(
+                                                                                18.dp
+                                                                            )
                                                                         )
+                                                                        Box(
+                                                                            modifier = Modifier
+                                                                                .size(36.dp)
+                                                                                .clickable(
+                                                                                    interactionSource = remember { MutableInteractionSource() },
+                                                                                    indication = ripple(
+                                                                                        bounded = false
+                                                                                    ),
+                                                                                    onClick = {
+                                                                                        Vibrator.click(
+                                                                                            context
+                                                                                        )
+                                                                                        systemMediaControlResolver.intentSystemMediaDialog()
+                                                                                    }),
+                                                                            contentAlignment = Alignment.Center
+                                                                        ) {
+                                                                            Icon(
+                                                                                painterResource(
+                                                                                    id = R.drawable.ic_nowplaying_airplay
+                                                                                ),
+                                                                                contentDescription = "AirPlay",
+                                                                                modifier = Modifier
+                                                                                    .size(21.5.dp),
+                                                                                tint = Color.Black withNight Color.White
+                                                                            )
+                                                                        }
                                                                     }
                                                                 }
                                                             }

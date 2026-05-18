@@ -35,6 +35,9 @@ import androidx.media3.session.SessionResult
 import cn.lyric.getter.api.API
 import cn.lyric.getter.api.data.ExtraData
 import cn.lyric.getter.api.tools.Tools
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.size.Precision
 import com.blankj.utilcode.util.ResourceUtils.getDrawable
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -63,6 +66,7 @@ import yos.music.player.data.libraries.PlayListV1
 import yos.music.player.data.libraries.PlayStatus
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.YosMediaItem
+import yos.music.player.data.libraries.thumb
 import yos.music.player.data.libraries.uri
 import yos.music.player.data.objects.MainViewModelObject
 import yos.music.player.data.objects.MediaViewModelObject
@@ -420,6 +424,33 @@ class YosPlaybackService : MediaSessionService() {
         }
     }
 
+    private fun prefetchArtwork(artwork: Any?) {
+        if (artwork == null) {
+            return
+        }
+
+        imageLoader.enqueue(
+            ImageRequest.Builder(this)
+                .data(artwork)
+                .memoryCacheKey(artwork.toString())
+                .placeholderMemoryCacheKey(artwork.toString())
+                .allowHardware(true)
+                .size(128)
+                .precision(Precision.INEXACT)
+                .build()
+        )
+    }
+
+    private fun prefetchAdjacentArtwork(player: Player) {
+        if (player.hasNextMediaItem()) {
+            prefetchArtwork(player.getMediaItemAt(player.nextMediaItemIndex).thumb)
+        }
+
+        if (player.hasPreviousMediaItem()) {
+            prefetchArtwork(player.getMediaItemAt(player.previousMediaItemIndex).thumb)
+        }
+    }
+
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
@@ -539,6 +570,10 @@ class YosPlaybackService : MediaSessionService() {
                         yos.music.player.code.MediaController.onCase(
                             it.toYosMediaItem()
                         )
+                    }
+
+                    runCatching {
+                        prefetchAdjacentArtwork(player)
                     }
 
                     // Sleep timer hook (PRD §5.6.2 FR-ST-6).
@@ -754,4 +789,3 @@ class YosPlaybackService : MediaSessionService() {
         controllerInfo: MediaSession.ControllerInfo
     ): MediaSession? = mediaSession
 }
-
