@@ -1,10 +1,12 @@
 package yos.music.player.ui.pages.library
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -14,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import yos.music.player.data.libraries.YosMediaItem
@@ -24,7 +27,19 @@ import yos.music.player.ui.widgets.basic.ImageQuality
 import yos.music.player.ui.widgets.basic.ShadowImageWithCache
 
 @Composable
-fun /*LazyItemScope.*/MusicList(music: YosMediaItem, itemClick: () -> Unit) {
+fun /*LazyItemScope.*/MusicList(
+    music: YosMediaItem,
+    modifier: Modifier = Modifier,
+    titleText: String = music.title ?: defaultTitle,
+    subtitleText: String? = music.artistsName ?: defaultArtistsName,
+    showArtwork: Boolean = true,
+    artworkSize: Dp = 52.dp,
+    leadingWidth: Dp = 24.dp,
+    horizontalPadding: Dp = 22.dp,
+    leadingContent: (@Composable () -> Unit)? = null,
+    trailingContent: (@Composable (RowScope.() -> Unit))? = null,
+    itemClick: () -> Unit,
+) {
     /*rememberSaveable(stateSaver = object : Saver<String?, Any> {
     override fun restore(value: Any): String? {
         return value as String?
@@ -92,30 +107,48 @@ LaunchedEffect(Unit) {
     )
     val alpha by animateFloatAsState(if (music() == musicPlaying.value) 0.3F else 1F)*/
     Row(
-        modifier = Modifier
+        modifier = modifier
             /*.animateItem(fadeInSpec = null, fadeOutSpec = null)*/
-            .height(64.dp)
+            .heightIn(min = 64.dp)
             .fillMaxWidth()
             .clickable {
                 itemClick()
             }
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = horizontalPadding, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         println("重组：歌曲列表 ${music.title}")
 
-        ShadowImageWithCache(
-            dataLambda = { music.thumb },
-            contentDescription = null,
-            modifier = Modifier.size(52.dp),
-            cornerRadius = 3.5.dp,
-            shadowAlpha = 0f,
-            imageQuality = ImageQuality.LOW
-        )
+        when {
+            showArtwork -> {
+                ShadowImageWithCache(
+                    dataLambda = { music.thumb },
+                    contentDescription = null,
+                    modifier = Modifier.size(artworkSize),
+                    cornerRadius = 3.5.dp,
+                    shadowAlpha = 0f,
+                    imageQuality = ImageQuality.LOW
+                )
+            }
 
-        Column(Modifier.padding(start = 16.dp)) {
+            leadingContent != null -> {
+                Box(
+                    modifier = Modifier.size(width = leadingWidth, height = artworkSize),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    leadingContent()
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = if (showArtwork || leadingContent != null) 16.dp else 0.dp)
+                .padding(end = if (trailingContent != null) 12.dp else 0.dp)
+        ) {
             Text(
-                text = music.title ?: defaultTitle,
+                text = titleText,
                 modifier = Modifier.padding(bottom = 1.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -123,13 +156,22 @@ LaunchedEffect(Unit) {
                 lineHeight = 16.sp,
             )
 
-            Text(
-                text = music.artistsName ?: defaultArtistsName,
-                modifier = Modifier.alpha(0.5f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 13.sp,
-                lineHeight = 13.sp,
+            if (subtitleText != null) {
+                Text(
+                    text = subtitleText,
+                    modifier = Modifier.alpha(0.5f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 13.sp,
+                    lineHeight = 13.sp,
+                )
+            }
+        }
+
+        if (trailingContent != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                content = trailingContent,
             )
         }
     }
