@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -89,22 +91,11 @@ fun PlayLists(navController: NavController) {
     val reorder = remember { PinReorderState() }
     val rowHeightPx = with(LocalDensity.current) { 80.dp.toPx() }
 
-    // FR-M-10 hook: surface the undo snackbar when arriving with a
-    // pending deletion.
-    val pendingDelete = PendingPlayListDeletion.current
-    val snackbarMessage = remember { mutableStateOf<String?>(null) }
-    val undoMessageFmt = stringResource(R.string.playlist_delete_undo_message)
-    val undoActionLabel = stringResource(R.string.playlist_delete_undo_action)
-    LaunchedEffect(pendingDelete?.playList?.listID) {
-        val p = pendingDelete ?: return@LaunchedEffect
-        snackbarMessage.value = undoMessageFmt.format(p.playList.name)
-        // 5s window; if the user doesn't tap Undo, drop the stash.
-        kotlinx.coroutines.delay(5000)
-        if (PendingPlayListDeletion.current === p) {
-            PendingPlayListDeletion.consume()
-            snackbarMessage.value = null
-        }
-    }
+    // FR-M-10: the delete-undo snackbar is hosted by MainActivity
+    // ([UndoSnackbarHost]), not this page — see the rationale on
+    // [PendingPlayListDeletion]. Nothing to do here other than
+    // PlayListLibrary.remove() + stash from the detail page, which
+    // happens in NormalMusic.onDelete.
 
     // PRD §5.5 FR-AP-5: this page's "Add" row opens the same reusable picker
     // used by the NowPlaying overflow menu, in create-only mode (no song to
@@ -131,8 +122,7 @@ fun PlayLists(navController: NavController) {
         }
     }
 
-    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
-        Title(
+    Title(
             title = stringResource(id = R.string.page_library_playlists),
             onBack = {
                 if (reorder.active) reorder.cancel() else navController.popBackStack()
@@ -230,24 +220,6 @@ fun PlayLists(navController: NavController) {
                 }
             }
         )
-
-        // PRD FR-M-10: in-page undo snackbar surfaced when the user
-        // returns from the detail page after a delete. Tap "Undo" to
-        // restore at the original position; auto-dismisses after 5s.
-        val message = snackbarMessage.value
-        if (message != null && pendingDelete != null) {
-            UndoSnackbar(
-                message = message,
-                actionLabel = undoActionLabel,
-                onAction = {
-                    PendingPlayListDeletion.consume()?.let {
-                        PlayListLibrary.restore(it.playList, it.originalIndex)
-                    }
-                    snackbarMessage.value = null
-                },
-            )
-        }
-    }
 }
 
 @Composable
@@ -367,7 +339,12 @@ private fun LazyItemScope.PlayListItem(playListType: PlayListType, title: String
         val shape = YosRoundedCornerShape(4.dp)
         val density = LocalDensity.current
 
-        Image(painter = painterResource(id = if (playListType == PlayListType.Add) R.drawable.placeholder_playlist_new else R.drawable.placeholder_playlist_default),
+        val coverResId = when (playListType)
+        {
+            PlayListType.Add -> R.drawable.placeholder_playlist_new
+            PlayListType.Favorite -> R.drawable.placeholder_playlist_fav
+        }
+        Image(painter = painterResource(id = coverResId),
             contentDescription = null,
             modifier = Modifier
                 .size(64.dp)
@@ -616,51 +593,3 @@ private fun LazyItemScope.PinnedAwarePlayListItem(
     }
 }
 
-/**
- * Bottom-aligned snackbar surface for the delete-undo flow
- * (PRD FR-M-10). Auto-dismisses after 5s; the host's
- * [PendingPlayListDeletion.consume] timer cleans up state.
- */
-@Composable
-private fun androidx.compose.foundation.layout.BoxScope.UndoSnackbar(
-    message: String,
-    actionLabel: String,
-    onAction: () -> Unit,
-) {
-    val context = LocalContext.current
-    Row(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .padding(bottom = 24.dp, start = 16.dp, end = 16.dp)
-            .fillMaxWidth()
-            .background(
-                color = (Color.DarkGray withNight Color.Gray).copy(alpha = 0.95f),
-                shape = YosRoundedCornerShape(12.dp),
-            )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = message,
-            color = Color.White,
-            fontSize = 15.sp,
-            modifier = Modifier.weight(1f),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = actionLabel,
-            color = MaterialTheme.colorScheme.primary,
-            fontSize = 15.sp,
-            modifier = Modifier
-                .clickable(
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    indication = null,
-                ) {
-                    Vibrator.click(context)
-                    onAction()
-                },
-        )
-    }
-}

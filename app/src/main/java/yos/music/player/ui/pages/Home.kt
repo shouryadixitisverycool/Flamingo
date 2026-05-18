@@ -128,7 +128,7 @@ fun RecommendCard(imageViewModel: ImageViewModel) {
                 state = pagerState,
                 pageSize = PageSize.Fixed(278.dp),
                 contentPadding = PaddingValues(start = 20.dp, end = 136.dp),
-                key = { randomMusicList.value[it] },
+                key = { pageIndex -> "$pageIndex:${randomMusicList.value[pageIndex].uri}" },
                 beyondViewportPageCount = 5
             ) { page ->
                 val music = randomMusicList.value[page]

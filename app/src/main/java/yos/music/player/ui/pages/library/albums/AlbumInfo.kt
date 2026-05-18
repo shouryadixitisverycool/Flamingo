@@ -258,7 +258,7 @@ fun AlbumInfo(
 
                 itemsIndexed(
                     songs,
-                    key = { _, music -> music }/*,
+                    key = { indexOfMusic, music -> "$indexOfMusic:${music.uri}" }/*,
                     contentType = { _, _ -> "AlbumInfo_item" }*/
                 ) { index, music ->
                     key(music) {

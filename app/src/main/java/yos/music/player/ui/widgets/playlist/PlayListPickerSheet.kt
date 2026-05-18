@@ -406,49 +406,52 @@ private fun CreatePlaylistBody(
     val buttonHeight = 50.dp
     val buttonShape = RoundedCornerShape(buttonHeight.div(2))
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(buttonHeight)
-            .background(
-                color = if (canConfirm) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                shape = buttonShape,
-            )
-            .clip(buttonShape)
-            .clickable(enabled = canConfirm) {
-                Vibrator.click(context)
-                onConfirm()
-            },
-        contentAlignment = Alignment.Center,
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = stringResource(R.string.playlist_picker_create_confirm),
-            color = Color.White,
-            fontSize = 16.5.sp,
-        )
-    }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(buttonHeight)
-            .clip(buttonShape)
-            .background(
-                color = (Color.LightGray withNight Color.DarkGray).copy(alpha = 0.25f),
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(buttonHeight)
+                .clip(buttonShape)
+                .background(
+                    color = (Color.LightGray withNight Color.DarkGray).copy(alpha = 0.25f),
+                )
+                .clickable {
+                    Vibrator.click(context)
+                    onCancel()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(R.string.playlist_picker_cancel),
+                fontSize = 16.5.sp,
             )
-            .clickable {
-                Vibrator.click(context)
-                onCancel()
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.playlist_picker_cancel),
-            fontSize = 16.5.sp,
-        )
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(buttonHeight)
+                .background(
+                    color = if (canConfirm) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                    shape = buttonShape,
+                )
+                .clip(buttonShape)
+                .clickable(enabled = canConfirm) {
+                    Vibrator.click(context)
+                    onConfirm()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(R.string.playlist_picker_create_confirm),
+                color = Color.White,
+                fontSize = 16.5.sp,
+            )
+        }
     }
 }
 

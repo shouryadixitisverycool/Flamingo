@@ -113,7 +113,23 @@ fun NormalMusic(navController: NavController) {
             playListId?.let { id -> playList.firstOrNull { it.listID == id } }
         }
 
-        val musicList = pageInfo.second
+        // PRD §5.3 follow-up: when viewing a playlist, the source of
+        // truth for the song list is the live [PlayList.songDataList]
+        // — *not* the snapshot captured into [LibraryObject.targetList]
+        // at navigation time. Re-resolving on every recomposition is
+        // what makes Edit Playlist edits (reorder, remove, cover, etc.)
+        // reflect immediately without having to leave and re-enter
+        // the detail page. For non-playlist views we keep the original
+        // behaviour (read whatever was handed to us by the caller).
+        val musicList = if (activePlayList != null) {
+            remember(activePlayList.songDataList, songs) {
+                activePlayList.songDataList.mapNotNull { uri ->
+                    songs.firstOrNull { it.uri == uri }
+                }
+            }
+        } else {
+            pageInfo.second
+        }
         val searchText = remember("NormalMusic_searchText") {
             mutableStateOf("")
         }
@@ -161,6 +177,12 @@ fun NormalMusic(navController: NavController) {
                     SongSort,
                     EnableDescending,
                     activePlayList?.listID,
+                    // PRD §5.3 follow-up: re-run when the playlist
+                    // body itself changes (Edit modal reorder/remove,
+                    // single-song removal from a row menu, …) so the
+                    // rendered list isn't pinned to a stale snapshot.
+                    activePlayList?.songDataList,
+                    musicList,
                     PlayListSortPreference.sort,
                     PlayListSortPreference.descending,
                 ) {

@@ -58,7 +58,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ripple
@@ -1007,11 +1007,11 @@ private fun PlayingList(
                             item("blank_before") {
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
-                            items(
+                            itemsIndexed(
                                 musicList.value ?: emptyList(),
-                                key = { music -> music }/*,
-                                contentType = { _ -> "NowPlaying_item" }*/
-                            ) { music ->
+                                key = { indexOfMusic, music -> "$indexOfMusic:${music.uri}" }/*,
+                                contentType = { _, _ -> "NowPlaying_item" }*/
+                            ) { _, music ->
                                 SmallMusicListItem(
                                     music
                                 ) {
