@@ -1,5 +1,6 @@
 package yos.music.player.ui.pages.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -64,11 +65,13 @@ fun MusicDetailPage(
     searchText: String,
     searchPlaceholder: String,
     enableSearch: Boolean,
+    searchModeActive: Boolean,
     searchRequestFocusSignal: Int,
     onBack: () -> Unit,
     onSort: () -> Unit,
     onSearchTextChange: (String) -> Unit,
     onSearchClick: () -> Unit,
+    onSearchDismiss: () -> Unit,
     artwork: @Composable BoxScope.() -> Unit,
     headerContent: @Composable ColumnScope.() -> Unit,
     actionContent: @Composable () -> Unit,
@@ -79,9 +82,14 @@ fun MusicDetailPage(
     val heroHeight = (configuration.screenHeightDp.dp * 0.52f).coerceIn(320.dp, 468.dp)
     val heroHeightPx = with(density) { heroHeight.toPx() }
 
-    val collapseProgress by remember(listState, heroHeightPx) {
+    if (searchModeActive) {
+        BackHandler(onBack = onSearchDismiss)
+    }
+
+    val collapseProgress by remember(listState, heroHeightPx, searchModeActive) {
         derivedStateOf {
             when {
+                searchModeActive -> 1f
                 listState.firstVisibleItemIndex > 0 -> 1f
                 heroHeightPx == 0f -> 0f
                 else -> {
@@ -104,96 +112,77 @@ fun MusicDetailPage(
             flingBehavior = rememberOverscrollFlingBehavior { listState },
             contentPadding = PaddingValues(bottom = 0.dp),
         ) {
-            item("MusicDetailHero") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(heroHeight)
-                ) {
+            if (!searchModeActive) {
+                item("MusicDetailHero") {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            .height(heroHeight)
                     ) {
-                        artwork()
-                    }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                        ) {
+                            artwork()
+                        }
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.22f),
-                                        Color.Black.copy(alpha = 0.46f),
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
-                                        MaterialTheme.colorScheme.background,
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.22f),
+                                            Color.Black.copy(alpha = 0.46f),
+                                            MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
+                                            MaterialTheme.colorScheme.background,
+                                        ),
                                     ),
                                 ),
-                            ),
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 20.dp, vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Spacer(modifier = Modifier.height(88.dp))
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            content = headerContent,
                         )
 
-                        Spacer(modifier = Modifier.height(28.dp))
-                        actionContent()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 20.dp, vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Spacer(modifier = Modifier.height(88.dp))
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                content = headerContent,
+                            )
+
+                            Spacer(modifier = Modifier.height(28.dp))
+                            actionContent()
+                        }
                     }
                 }
             }
 
-            if (enableSearch) {
+            if (enableSearch && searchModeActive) {
                 item("MusicDetailSearch") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 18.dp)
-                            .padding(top = 10.dp, bottom = 8.dp),
+                            .padding(top = 76.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         SearchTextField(
                             text = searchText,
                             placeholder = searchPlaceholder,
                             onValueChange = onSearchTextChange,
-                            onSearch = onSearchClick,
+                            onSearch = {},
                             modifier = Modifier.weight(1f),
                             requestFocusSignal = searchRequestFocusSignal,
+                            onClear = {
+                                onSearchTextChange("")
+                            },
                         )
-
-                        if (searchText.isNotEmpty()) {
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) {
-                                        onSearchTextChange("")
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_action_close),
-                                    contentDescription = stringResource(R.string.playlist_search_clear_cd),
-                                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -208,9 +197,18 @@ fun MusicDetailPage(
         MusicDetailTopBar(
             title = title,
             collapseProgress = collapseProgress,
-            onBack = onBack,
+            searchModeActive = searchModeActive,
+            onBack = if (searchModeActive) {
+                onSearchDismiss
+            } else {
+                onBack
+            },
             onSort = onSort,
-            onSearchClick = onSearchClick,
+            onSearchClick = if (searchModeActive) {
+                onSearchDismiss
+            } else {
+                onSearchClick
+            },
         )
     }
 }
@@ -222,6 +220,8 @@ fun MusicDetailCircleButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     accent: Boolean = false,
+    selected: Boolean = false,
+    iconSize: androidx.compose.ui.unit.Dp = 22.dp,
     onClick: () -> Unit,
 ) {
     val backgroundColor = if (accent) {
@@ -229,7 +229,7 @@ fun MusicDetailCircleButton(
     } else {
         Color.Black.copy(alpha = 0.36f)
     }
-    val tint = if (accent) {
+    val tint = if (selected || accent) {
         MaterialTheme.colorScheme.primary
     } else {
         Color.White
@@ -253,7 +253,7 @@ fun MusicDetailCircleButton(
             painter = painter,
             contentDescription = contentDescription,
             tint = tint,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(iconSize),
         )
     }
 }
@@ -328,6 +328,7 @@ fun MusicDetailPillDivider() {
 private fun MusicDetailTopBar(
     title: String,
     collapseProgress: Float,
+    searchModeActive: Boolean,
     onBack: () -> Unit,
     onSort: () -> Unit,
     onSearchClick: () -> Unit,
@@ -392,9 +393,17 @@ private fun MusicDetailTopBar(
 
                     MusicDetailTopBarInlineButton(
                         painter = painterResource(
-                            id = R.drawable.ic_action_search,
+                            id = if (searchModeActive) {
+                                R.drawable.ic_action_close
+                            } else {
+                                R.drawable.ic_action_search
+                            },
                         ),
-                        contentDescription = searchTitle(title),
+                        contentDescription = if (searchModeActive) {
+                            stringResource(R.string.playlist_search_clear_cd)
+                        } else {
+                            searchTitle(title)
+                        },
                         iconTint = iconTint,
                         onClick = onSearchClick,
                     )

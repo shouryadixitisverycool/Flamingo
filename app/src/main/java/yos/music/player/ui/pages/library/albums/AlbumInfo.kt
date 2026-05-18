@@ -147,6 +147,9 @@ fun AlbumInfo(
     val addToPlaylistOpen = remember("AlbumInfo_addToPlaylistOpen") {
         mutableStateOf(false)
     }
+    val searchModeActive = remember(albumName.value) {
+        mutableStateOf(false)
+    }
     val searchFocusSignal = remember(albumName.value) {
         mutableStateOf(0)
     }
@@ -235,6 +238,7 @@ fun AlbumInfo(
         searchText = searchText.value,
         searchPlaceholder = stringResource(id = R.string.page_library_search_album_tracks),
         enableSearch = true,
+        searchModeActive = searchModeActive.value,
         searchRequestFocusSignal = searchFocusSignal.value,
         onBack = {
             navController.popBackStack()
@@ -247,8 +251,16 @@ fun AlbumInfo(
         },
         onSearchClick = {
             scope.launch {
-                listState.animateScrollToItem(1)
+                searchModeActive.value = true
+                listState.scrollToItem(0)
                 searchFocusSignal.value += 1
+            }
+        },
+        onSearchDismiss = {
+            scope.launch {
+                searchText.value = ""
+                searchModeActive.value = false
+                listState.scrollToItem(0)
             }
         },
         artwork = {
@@ -325,7 +337,8 @@ fun AlbumInfo(
                             R.string.album_action_favorite
                         },
                     ),
-                    accent = allSongsFavorited,
+                    selected = allSongsFavorited,
+                    iconSize = 26.dp,
                     onClick = {
                         if (allSongsFavorited) {
                             albumSongs.forEach { FavPlayListLibrary.removeMusic(it) }
@@ -342,6 +355,7 @@ fun AlbumInfo(
                 MusicDetailCircleButton(
                     painter = painterResource(id = R.drawable.ic_nowplaying_more),
                     contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                    iconSize = 26.dp,
                     onClick = {
                         overflowSheetOpen.value = true
                     },

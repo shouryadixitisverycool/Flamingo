@@ -234,6 +234,9 @@ fun NormalMusic(navController: NavController) {
             val editModalOpen = remember { mutableStateOf(false) }
             val sortSheetOpen = remember { mutableStateOf(false) }
             val playListListState = rememberLazyListState()
+            val playListSearchModeActive = remember(activePlayList?.listID) {
+                mutableStateOf(false)
+            }
             val playListSearchFocusSignal = remember(activePlayList?.listID) {
                 mutableStateOf(0)
             }
@@ -356,6 +359,7 @@ fun NormalMusic(navController: NavController) {
                         searchText = searchText.value,
                         searchPlaceholder = stringResource(id = R.string.playlist_search_placeholder),
                         enableSearch = true,
+                        searchModeActive = playListSearchModeActive.value,
                         searchRequestFocusSignal = playListSearchFocusSignal.value,
                         onBack = {
                             navController.popBackStack()
@@ -368,8 +372,16 @@ fun NormalMusic(navController: NavController) {
                         },
                         onSearchClick = {
                             scope.launch {
-                                playListListState.animateScrollToItem(1)
+                                playListSearchModeActive.value = true
+                                playListListState.scrollToItem(0)
                                 playListSearchFocusSignal.value += 1
+                            }
+                        },
+                        onSearchDismiss = {
+                            scope.launch {
+                                searchText.value = ""
+                                playListSearchModeActive.value = false
+                                playListListState.scrollToItem(0)
                             }
                         },
                         artwork = {
@@ -450,6 +462,7 @@ fun NormalMusic(navController: NavController) {
                                 MusicDetailCircleButton(
                                     painter = painterResource(id = R.drawable.ic_nowplaying_more),
                                     contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                                    iconSize = 26.dp,
                                     onClick = {
                                         overflowSheetOpen.value = true
                                     },
