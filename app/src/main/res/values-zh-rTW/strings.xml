@@ -74,6 +74,7 @@
     <string name="album_sort_track_number">曲目編號</string>
     <string name="album_action_favorite">收藏專輯</string>
     <string name="album_action_unfavorite">取消收藏專輯</string>
+    <string name="music_detail_search_cd">在 %1$s 中搜尋</string>
     <string name="normal_button_play">播放</string>
     <string name="normal_button_shuffle">隨機播放</string>
     <string name="page_library_album_info_others">%1$d 首歌曲, 約 %2$d 分鐘</string>

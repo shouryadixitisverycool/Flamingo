@@ -14,11 +14,16 @@ import androidx.compose.material.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,10 +38,20 @@ fun SearchTextField(
     placeholder: String,
     onValueChange: (String) -> Unit,
     onSearch: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    requestFocusSignal: Int = 0,
 ) {
-    //val keyboardController = LocalSoftwareKeyboardController.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
     val fontSize = 17.sp
+
+    LaunchedEffect(requestFocusSignal) {
+        if (requestFocusSignal > 0) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
     Surface(color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
         Row(
             modifier = modifier
@@ -77,7 +92,9 @@ fun SearchTextField(
                         keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.Search
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                 )
             }

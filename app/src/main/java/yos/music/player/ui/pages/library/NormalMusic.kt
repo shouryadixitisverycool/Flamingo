@@ -38,7 +38,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -112,8 +111,8 @@ fun NormalMusic(navController: NavController) {
         // PRD §5.2: playlist-only actions surface only when we
         // arrived from the Playlists page (which sets this state).
         val playListId = LibraryObject.targetPlayListId.value
-        val activePlayList: PlayList? = remember(playListId, playList) {
-            playListId?.let { id -> playList.firstOrNull { it.listID == id } }
+        val activePlayList: PlayList? = playListId?.let { id ->
+            playList.firstOrNull { it.listID == id }
         }
 
         // PRD §5.3 follow-up: when viewing a playlist, the source of
@@ -133,7 +132,7 @@ fun NormalMusic(navController: NavController) {
         } else {
             pageInfo.second
         }
-        val searchText = remember("NormalMusic_searchText") {
+        val searchText = remember(activePlayList?.listID) {
             mutableStateOf("")
         }
 
@@ -161,7 +160,7 @@ fun NormalMusic(navController: NavController) {
             }
         } else {
             val useSearch = remember { derivedStateOf { searchText.value.isNotEmpty() } }
-            val list: MutableState<List<YosMediaItem>> = remember {
+            val list: MutableState<List<YosMediaItem>> = remember(activePlayList?.listID) {
                 mutableStateOf(if (activePlayList != null) musicList else musicList.sortX())
             }
 
@@ -235,8 +234,8 @@ fun NormalMusic(navController: NavController) {
             val editModalOpen = remember { mutableStateOf(false) }
             val sortSheetOpen = remember { mutableStateOf(false) }
             val playListListState = rememberLazyListState()
-            val playListSearchVisible = remember(activePlayList?.listID) {
-                mutableStateOf(false)
+            val playListSearchFocusSignal = remember(activePlayList?.listID) {
+                mutableStateOf(0)
             }
 
             // Playlist detail layout — search bar is always visible
@@ -356,7 +355,8 @@ fun NormalMusic(navController: NavController) {
                         listState = playListListState,
                         searchText = searchText.value,
                         searchPlaceholder = stringResource(id = R.string.playlist_search_placeholder),
-                        showSearch = playListSearchVisible.value || searchText.value.isNotEmpty(),
+                        enableSearch = true,
+                        searchRequestFocusSignal = playListSearchFocusSignal.value,
                         onBack = {
                             navController.popBackStack()
                         },
@@ -366,15 +366,10 @@ fun NormalMusic(navController: NavController) {
                         onSearchTextChange = {
                             searchText.value = it
                         },
-                        onSearchToggle = {
-                            val newVisibility = !(playListSearchVisible.value || searchText.value.isNotEmpty())
-                            playListSearchVisible.value = newVisibility
-                            if (newVisibility) {
-                                scope.launch {
-                                    playListListState.animateScrollToItem(1)
-                                }
-                            } else {
-                                searchText.value = ""
+                        onSearchClick = {
+                            scope.launch {
+                                playListListState.animateScrollToItem(1)
+                                playListSearchFocusSignal.value += 1
                             }
                         },
                         artwork = {
@@ -426,8 +421,40 @@ fun NormalMusic(navController: NavController) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp),
+                                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(
+                                    14.dp,
+                                    Alignment.CenterHorizontally,
+                                ),
                             ) {
+                                MusicDetailCircleButton(
+                                    painter = painterResource(id = R.drawable.button_icon_play),
+                                    contentDescription = stringResource(id = R.string.normal_button_play),
+                                    enabled = list.value.isNotEmpty(),
+                                    onClick = {
+                                        if (list.value.isEmpty()) return@MusicDetailCircleButton
+
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.prepare(list.value.first(), list.value)
+                                        }
+                                    },
+                                )
+
+                                MusicDetailCircleButton(
+                                    painter = painterResource(id = R.drawable.ic_action_edit),
+                                    contentDescription = stringResource(id = R.string.playlist_overflow_edit),
+                                    onClick = {
+                                        editModalOpen.value = true
+                                    },
+                                )
+
+                                MusicDetailCircleButton(
+                                    painter = painterResource(id = R.drawable.ic_nowplaying_more),
+                                    contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                                    onClick = {
+                                        overflowSheetOpen.value = true
+                                    },
+                                )
+
                                 MusicDetailCircleButton(
                                     painter = painterResource(id = R.drawable.button_icon_shuffle),
                                     contentDescription = stringResource(id = R.string.normal_button_shuffle),
@@ -438,40 +465,6 @@ fun NormalMusic(navController: NavController) {
                                         MediaController.mediaControl?.shuffleModeEnabled = true
                                         scope.launch(Dispatchers.IO) {
                                             MediaController.prepare(list.value.random(), list.value)
-                                        }
-                                    },
-                                )
-
-                                MusicDetailActionPill(modifier = Modifier.weight(1f)) {
-                                    MusicDetailPillButton(
-                                        painter = painterResource(id = R.drawable.ic_action_edit),
-                                        contentDescription = stringResource(id = R.string.playlist_overflow_edit),
-                                        onClick = {
-                                            editModalOpen.value = true
-                                        },
-                                    )
-
-                                    MusicDetailPillDivider()
-
-                                    MusicDetailPillButton(
-                                        painter = painterResource(id = R.drawable.ic_nowplaying_more),
-                                        contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
-                                        onClick = {
-                                            overflowSheetOpen.value = true
-                                        },
-                                    )
-                                }
-
-                                MusicDetailCircleButton(
-                                    painter = painterResource(id = R.drawable.button_icon_play),
-                                    contentDescription = stringResource(id = R.string.normal_button_play),
-                                    enabled = list.value.isNotEmpty(),
-                                    accent = true,
-                                    onClick = {
-                                        if (list.value.isEmpty()) return@MusicDetailCircleButton
-
-                                        scope.launch(Dispatchers.IO) {
-                                            MediaController.prepare(list.value.first(), list.value)
                                         }
                                     },
                                 )

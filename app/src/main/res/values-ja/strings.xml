@@ -74,6 +74,7 @@
     <string name="album_sort_track_number">トラック番号</string>
     <string name="album_action_favorite">アルバムをお気に入り</string>
     <string name="album_action_unfavorite">アルバムをお気に入りから削除</string>
+    <string name="music_detail_search_cd">%1$s 内を検索</string>
     <string name="normal_button_play">再生</string>
     <string name="normal_button_shuffle">シャッフル</string>
     <string name="page_library_album_info_others">%1$d 曲, 約 %2$d 分</string>

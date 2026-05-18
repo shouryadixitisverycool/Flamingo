@@ -47,6 +47,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.github.promeg.pinyinhelper.Pinyin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import yos.music.player.R
@@ -64,14 +65,13 @@ import yos.music.player.data.libraries.defaultArtists
 import yos.music.player.data.libraries.defaultArtistsName
 import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.objects.LibraryObject
-import yos.music.player.ui.pages.library.MusicDetailActionPill
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
-import yos.music.player.ui.pages.library.MusicDetailPillButton
-import yos.music.player.ui.pages.library.MusicDetailPillDivider
 import yos.music.player.ui.pages.library.MusicList
+import yos.music.player.ui.pages.library.playlists.PlayListSearch
 import yos.music.player.ui.theme.withNight
 import yos.music.player.ui.widgets.basic.ActionItem
+import yos.music.player.ui.widgets.basic.ActionSheetBody
 import yos.music.player.ui.widgets.basic.ActionSheet
 import yos.music.player.ui.widgets.basic.Title
 import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
@@ -126,11 +126,8 @@ fun AlbumInfo(
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val searchText = rememberSaveable(key = "AlbumInfo_searchText") {
+    val searchText = rememberSaveable(albumName.value) {
         mutableStateOf("")
-    }
-    val searchVisible = rememberSaveable(key = "AlbumInfo_searchVisible") {
-        mutableStateOf(false)
     }
     val sortOption = rememberSaveable(key = "AlbumInfo_sortOption") {
         mutableStateOf(AlbumSortOption.TrackNumber)
@@ -149,6 +146,9 @@ fun AlbumInfo(
     }
     val addToPlaylistOpen = remember("AlbumInfo_addToPlaylistOpen") {
         mutableStateOf(false)
+    }
+    val searchFocusSignal = remember(albumName.value) {
+        mutableStateOf(0)
     }
 
     val primaryArtists = remember(albumSongs) {
@@ -183,61 +183,29 @@ fun AlbumInfo(
         sortOption.value,
         descending.value,
     ) {
+        if (searchText.value.isNotBlank()) {
+            delay(150)
+        }
+
         withContext(Dispatchers.Default) {
-            val baseList = albumSongs.sortForAlbum(sortOption.value, descending.value)
             displayedSongs.value = if (searchText.value.isBlank()) {
-                baseList
+                albumSongs.sortForAlbum(sortOption.value, descending.value)
             } else {
-                baseList.filter { song ->
-                    (song.title ?: defaultTitle).contains(searchText.value, ignoreCase = true) ||
-                            (song.artistsList ?: defaultArtists).any { artist ->
-                                artist.contains(searchText.value, ignoreCase = true)
-                            }
-                }
+                PlayListSearch.matchAndRank(albumSongs, searchText.value)
             }
         }
     }
 
-    ActionSheet(
+    AlbumSortSheet(
         isOpen = sortSheetOpen,
-        items = listOf(
-            ActionItem(
-                iconRes = R.drawable.ic_action_sort,
-                label = stringResource(id = R.string.album_sort_track_number),
-                tint = if (sortOption.value == AlbumSortOption.TrackNumber) MaterialTheme.colorScheme.primary else null,
-                showChevron = false,
-                onClick = {
-                    sortOption.value = AlbumSortOption.TrackNumber
-                },
-            ),
-            ActionItem(
-                iconRes = R.drawable.ic_action_sort,
-                label = stringResource(id = R.string.normal_button_sort_by_name),
-                tint = if (sortOption.value == AlbumSortOption.Title) MaterialTheme.colorScheme.primary else null,
-                showChevron = false,
-                onClick = {
-                    sortOption.value = AlbumSortOption.Title
-                },
-            ),
-            ActionItem(
-                iconRes = R.drawable.ic_action_sort,
-                label = stringResource(id = R.string.playlist_sort_ascending),
-                tint = if (!descending.value) MaterialTheme.colorScheme.primary else null,
-                showChevron = false,
-                onClick = {
-                    descending.value = false
-                },
-            ),
-            ActionItem(
-                iconRes = R.drawable.ic_action_sort,
-                label = stringResource(id = R.string.playlist_sort_descending),
-                tint = if (descending.value) MaterialTheme.colorScheme.primary else null,
-                showChevron = false,
-                onClick = {
-                    descending.value = true
-                },
-            ),
-        ),
+        sortOption = sortOption.value,
+        descending = descending.value,
+        onSortChange = {
+            sortOption.value = it
+        },
+        onDescendingChange = {
+            descending.value = it
+        },
     )
 
     ActionSheet(
@@ -266,7 +234,8 @@ fun AlbumInfo(
         listState = listState,
         searchText = searchText.value,
         searchPlaceholder = stringResource(id = R.string.page_library_search_album_tracks),
-        showSearch = searchVisible.value || searchText.value.isNotEmpty(),
+        enableSearch = true,
+        searchRequestFocusSignal = searchFocusSignal.value,
         onBack = {
             navController.popBackStack()
         },
@@ -276,15 +245,10 @@ fun AlbumInfo(
         onSearchTextChange = {
             searchText.value = it
         },
-        onSearchToggle = {
-            val newVisibility = !(searchVisible.value || searchText.value.isNotEmpty())
-            searchVisible.value = newVisibility
-            if (newVisibility) {
-                scope.launch {
-                    listState.animateScrollToItem(1)
-                }
-            } else {
-                searchText.value = ""
+        onSearchClick = {
+            scope.launch {
+                listState.animateScrollToItem(1)
+                searchFocusSignal.value += 1
             }
         },
         artwork = {
@@ -330,8 +294,59 @@ fun AlbumInfo(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
             ) {
+                MusicDetailCircleButton(
+                    painter = painterResource(id = R.drawable.button_icon_play),
+                    contentDescription = stringResource(id = R.string.normal_button_play),
+                    enabled = displayedSongs.value.isNotEmpty(),
+                    onClick = {
+                        val songsToPlay = displayedSongs.value
+                        if (songsToPlay.isEmpty()) return@MusicDetailCircleButton
+
+                        scope.launch(Dispatchers.IO) {
+                            MediaController.prepare(songsToPlay.first(), songsToPlay)
+                        }
+                    },
+                )
+
+                MusicDetailCircleButton(
+                    painter = painterResource(
+                        id = if (allSongsFavorited) {
+                            R.drawable.ic_nowplaying_favorited
+                        } else {
+                            R.drawable.ic_nowplaying_favorite
+                        },
+                    ),
+                    contentDescription = stringResource(
+                        id = if (allSongsFavorited) {
+                            R.string.album_action_unfavorite
+                        } else {
+                            R.string.album_action_favorite
+                        },
+                    ),
+                    accent = allSongsFavorited,
+                    onClick = {
+                        if (allSongsFavorited) {
+                            albumSongs.forEach { FavPlayListLibrary.removeMusic(it) }
+                        } else {
+                            albumSongs.forEach { song ->
+                                if (!FavPlayListLibrary.isFavorite(song)) {
+                                    FavPlayListLibrary.addMusic(song)
+                                }
+                            }
+                        }
+                    },
+                )
+
+                MusicDetailCircleButton(
+                    painter = painterResource(id = R.drawable.ic_nowplaying_more),
+                    contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                    onClick = {
+                        overflowSheetOpen.value = true
+                    },
+                )
+
                 MusicDetailCircleButton(
                     painter = painterResource(id = R.drawable.button_icon_shuffle),
                     contentDescription = stringResource(id = R.string.normal_button_shuffle),
@@ -343,62 +358,6 @@ fun AlbumInfo(
                         MediaController.mediaControl?.shuffleModeEnabled = true
                         scope.launch(Dispatchers.IO) {
                             MediaController.prepare(songsToPlay.random(), songsToPlay)
-                        }
-                    },
-                )
-
-                MusicDetailActionPill(modifier = Modifier.weight(1f)) {
-                    MusicDetailPillButton(
-                        painter = painterResource(
-                            id = if (allSongsFavorited) {
-                                R.drawable.ic_nowplaying_favorited
-                            } else {
-                                R.drawable.ic_nowplaying_favorite
-                            },
-                        ),
-                        contentDescription = stringResource(
-                            id = if (allSongsFavorited) {
-                                R.string.album_action_unfavorite
-                            } else {
-                                R.string.album_action_favorite
-                            },
-                        ),
-                        selected = allSongsFavorited,
-                        onClick = {
-                            if (allSongsFavorited) {
-                                albumSongs.forEach { FavPlayListLibrary.removeMusic(it) }
-                            } else {
-                                albumSongs.forEach { song ->
-                                    if (!FavPlayListLibrary.isFavorite(song)) {
-                                        FavPlayListLibrary.addMusic(song)
-                                    }
-                                }
-                            }
-                        },
-                    )
-
-                    MusicDetailPillDivider()
-
-                    MusicDetailPillButton(
-                        painter = painterResource(id = R.drawable.ic_nowplaying_more),
-                        contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
-                        onClick = {
-                            overflowSheetOpen.value = true
-                        },
-                    )
-                }
-
-                MusicDetailCircleButton(
-                    painter = painterResource(id = R.drawable.button_icon_play),
-                    contentDescription = stringResource(id = R.string.normal_button_play),
-                    enabled = displayedSongs.value.isNotEmpty(),
-                    accent = true,
-                    onClick = {
-                        val songsToPlay = displayedSongs.value
-                        if (songsToPlay.isEmpty()) return@MusicDetailCircleButton
-
-                        scope.launch(Dispatchers.IO) {
-                            MediaController.prepare(songsToPlay.first(), songsToPlay)
                         }
                     },
                 )
@@ -492,6 +451,78 @@ private fun AlbumHeroArtwork(songs: List<YosMediaItem>) {
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxSize(),
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AlbumSortSheet(
+    isOpen: MutableState<Boolean>,
+    sortOption: AlbumSortOption,
+    descending: Boolean,
+    onSortChange: (AlbumSortOption) -> Unit,
+    onDescendingChange: (Boolean) -> Unit,
+) {
+    if (!isOpen.value) return
+
+    val accent = MaterialTheme.colorScheme.primary
+
+    YosBottomSheetDialog(onDismissRequest = { isOpen.value = false }) {
+        ActionSheetBody(
+            items = listOf(
+                ActionItem(
+                    iconRes = R.drawable.ic_action_sort,
+                    label = stringResource(id = R.string.album_sort_track_number),
+                    tint = if (sortOption == AlbumSortOption.TrackNumber) accent else null,
+                    showChevron = false,
+                    onClick = {
+                        onSortChange(AlbumSortOption.TrackNumber)
+                    },
+                ),
+                ActionItem(
+                    iconRes = R.drawable.ic_action_sort,
+                    label = stringResource(id = R.string.normal_button_sort_by_name),
+                    tint = if (sortOption == AlbumSortOption.Title) accent else null,
+                    showChevron = false,
+                    onClick = {
+                        onSortChange(AlbumSortOption.Title)
+                    },
+                ),
+            ),
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(0.15f)
+                .height(0.5.dp)
+                .background(Color.Black withNight Color.White),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ActionSheetBody(
+            items = listOf(
+                ActionItem(
+                    iconRes = R.drawable.ic_action_sort,
+                    label = stringResource(id = R.string.playlist_sort_ascending),
+                    tint = if (!descending) accent else null,
+                    showChevron = false,
+                    onClick = {
+                        onDescendingChange(false)
+                    },
+                ),
+                ActionItem(
+                    iconRes = R.drawable.ic_action_sort,
+                    label = stringResource(id = R.string.playlist_sort_descending),
+                    tint = if (descending) accent else null,
+                    showChevron = false,
+                    onClick = {
+                        onDescendingChange(true)
+                    },
+                ),
+            ),
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

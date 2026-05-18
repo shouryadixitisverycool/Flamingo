@@ -74,6 +74,7 @@
     <string name="album_sort_track_number">Track Number</string>
     <string name="album_action_favorite">Favorite album</string>
     <string name="album_action_unfavorite">Remove album from favorites</string>
+    <string name="music_detail_search_cd">Search in %1$s</string>
     <string name="normal_button_play">Play</string>
     <string name="normal_button_shuffle">Shuffle</string>
     <string name="page_library_album_info_others">%1$d Songs, about %2$d minutes</string>

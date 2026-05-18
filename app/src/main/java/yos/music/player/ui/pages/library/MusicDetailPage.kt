@@ -43,7 +43,6 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -64,11 +63,12 @@ fun MusicDetailPage(
     listState: LazyListState,
     searchText: String,
     searchPlaceholder: String,
-    showSearch: Boolean,
+    enableSearch: Boolean,
+    searchRequestFocusSignal: Int,
     onBack: () -> Unit,
     onSort: () -> Unit,
     onSearchTextChange: (String) -> Unit,
-    onSearchToggle: () -> Unit,
+    onSearchClick: () -> Unit,
     artwork: @Composable BoxScope.() -> Unit,
     headerContent: @Composable ColumnScope.() -> Unit,
     actionContent: @Composable () -> Unit,
@@ -76,7 +76,6 @@ fun MusicDetailPage(
 ) {
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val keyboardController = LocalSoftwareKeyboardController.current
     val heroHeight = (configuration.screenHeightDp.dp * 0.52f).coerceIn(320.dp, 468.dp)
     val heroHeightPx = with(density) { heroHeight.toPx() }
 
@@ -154,7 +153,7 @@ fun MusicDetailPage(
                 }
             }
 
-            if (showSearch) {
+            if (enableSearch) {
                 item("MusicDetailSearch") {
                     Row(
                         modifier = Modifier
@@ -167,12 +166,9 @@ fun MusicDetailPage(
                             text = searchText,
                             placeholder = searchPlaceholder,
                             onValueChange = onSearchTextChange,
-                            onSearch = {
-                                if (searchText.isNotEmpty()) {
-                                    keyboardController?.hide()
-                                }
-                            },
+                            onSearch = onSearchClick,
                             modifier = Modifier.weight(1f),
+                            requestFocusSignal = searchRequestFocusSignal,
                         )
 
                         if (searchText.isNotEmpty()) {
@@ -212,10 +208,9 @@ fun MusicDetailPage(
         MusicDetailTopBar(
             title = title,
             collapseProgress = collapseProgress,
-            searchVisible = showSearch,
             onBack = onBack,
             onSort = onSort,
-            onSearchToggle = onSearchToggle,
+            onSearchClick = onSearchClick,
         )
     }
 }
@@ -333,10 +328,9 @@ fun MusicDetailPillDivider() {
 private fun MusicDetailTopBar(
     title: String,
     collapseProgress: Float,
-    searchVisible: Boolean,
     onBack: () -> Unit,
     onSort: () -> Unit,
-    onSearchToggle: () -> Unit,
+    onSearchClick: () -> Unit,
 ) {
     val surfaceColor = lerp(
         start = Color.Black.copy(alpha = 0.34f),
@@ -398,26 +392,18 @@ private fun MusicDetailTopBar(
 
                     MusicDetailTopBarInlineButton(
                         painter = painterResource(
-                            id = if (searchVisible) {
-                                R.drawable.ic_action_close
-                            } else {
-                                R.drawable.ic_action_search
-                            },
+                            id = R.drawable.ic_action_search,
                         ),
-                        contentDescription = if (searchVisible) {
-                            stringResource(R.string.playlist_search_clear_cd)
-                        } else {
-                            stringResource(R.string.playlist_search_placeholder)
-                        },
+                        contentDescription = searchTitle(title),
                         iconTint = iconTint,
-                        onClick = onSearchToggle,
+                        onClick = onSearchClick,
                     )
                 }
             }
 
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .align(Alignment.Center)
                     .padding(horizontal = 84.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -452,6 +438,11 @@ private fun MusicDetailTopBar(
             )
         }
     }
+}
+
+@Composable
+private fun searchTitle(title: String): String {
+    return stringResource(R.string.music_detail_search_cd, title)
 }
 
 @Composable
