@@ -168,8 +168,9 @@ fun MusicDetailPage(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .statusBarsPadding()
                             .padding(horizontal = 18.dp)
-                            .padding(top = 76.dp, bottom = 8.dp),
+                            .padding(top = 64.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         SearchTextField(
