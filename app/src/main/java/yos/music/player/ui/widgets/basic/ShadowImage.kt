@@ -7,18 +7,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -53,10 +46,6 @@ fun ShadowImage(
     imageQuality: ImageQuality
 ) = YosWrapper {
     val shape = YosRoundedCornerShape(cornerRadius)
-    val density = LocalDensity.current
-    val shadowAlphaPx = remember(dataLambda()) {
-        with(density) { shadowAlpha.dp.toPx() }
-    }
     val url = dataLambda()
     AsyncImage(
         model = ImageRequest.Builder(LocalContext.current).data(data = url).crossfade(true)
@@ -87,30 +76,6 @@ fun ShadowImage(
                 compositingStrategy = CompositingStrategy.Offscreen
                 clip = true
                 this.shape = shape
-                /*this.shape = shape
-                shadowElevation = shadowAlphaPx
-                spotShadowColor = Color.Black.copy(alpha = 0.8f)*/
-            }
-            .drawWithCache {
-                onDrawWithContent {
-                    drawContent()
-                    val outline = shape.createOutline(
-                        Size(size.width, size.height),
-                        LayoutDirection.Ltr,
-                        density
-                    )
-                    drawOutline(
-                        outline = outline,
-                        color = Color.Gray.copy(alpha = 0.1f),
-                        style = Stroke(width = 12f)
-                    )
-                    drawOutline(
-                        outline = outline,
-                        color = Color.Gray.copy(alpha = 0.5f),
-                        style = Stroke(width = 12f),
-                        blendMode = BlendMode.Overlay
-                    )
-                }
             }
 
     )
@@ -129,7 +94,6 @@ fun ShadowImageWithCache(
 ) = YosWrapper {
     val shape = YosRoundedCornerShape(cornerRadius)
     val url = dataLambda()
-    val density = LocalDensity.current
     AsyncImage(
         model = ImageRequest.Builder(LocalContext.current).data(data = url).crossfade(true)
             .error(R.drawable.placeholder_music_default_artwork)
@@ -162,30 +126,6 @@ fun ShadowImageWithCache(
                 compositingStrategy = CompositingStrategy.Offscreen
                 clip = true
                 this.shape = shape
-                /*this.shape = shape
-                shadowElevation = shadowAlphaPx
-                spotShadowColor = Color.Black.copy(alpha = 0.8f)*/
-            }
-            .drawWithCache {
-                onDrawWithContent {
-                    drawContent()
-                    val outline = shape.createOutline(
-                        Size(size.width, size.height),
-                        LayoutDirection.Ltr,
-                        density
-                    )
-                    drawOutline(
-                        outline = outline,
-                        color = Color.Gray.copy(alpha = 0.1f),
-                        style = Stroke(width = 12f)
-                    )
-                    drawOutline(
-                        outline = outline,
-                        color = Color.Gray.copy(alpha = 0.5f),
-                        style = Stroke(width = 12f),
-                        blendMode = BlendMode.Overlay
-                    )
-                }
             }
 
     )
