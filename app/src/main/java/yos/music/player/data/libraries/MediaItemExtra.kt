@@ -96,21 +96,22 @@ val MediaItem.bitrate: Int
 */
 
 fun String.toMultipleArtists(): List<String> {
-    val delimiters = listOf("、", "/", "&", ";", "；", ",")
-    var mostFrequentDelimiter: String? = null
-    var maxCount = 0
+    val delimiters = buildList {
+        add("、")
+        SettingsLibrary.ArtistSplitSeparators
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { add(it) }
+    }.distinct()
 
-    for (delimiter in delimiters) {
-        val count = this.split(delimiter).size - 1
-        if (count > maxCount) {
-            maxCount = count
-            mostFrequentDelimiter = delimiter
+    val splitArtists = delimiters.fold(listOf(this)) { currentArtists, delimiter ->
+        currentArtists.flatMap { artist ->
+            artist.split(delimiter).map { it.trim() }
         }
-    }
+    }.filter { it.isNotEmpty() }
 
-    return mostFrequentDelimiter?.let { delimiter ->
-        this.split(delimiter).map { it.trim() }
-    } ?: listOf(this.trim())
+    return splitArtists.ifEmpty { listOf(this.trim()) }
 }
 
 fun List<String>.toArtistsString(): String {

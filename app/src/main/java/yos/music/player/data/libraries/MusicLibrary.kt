@@ -204,7 +204,7 @@ object MusicLibrary {
             writer = this.writer,
             compilation = this.compilation,
             composer = this.composer,
-            artists = this.artistsName,
+            artists = this.mediaMetadata.artist?.toString(),
             album = this.album,
             albumArtists = this.albumArtists,
             thumb = this.thumb,
