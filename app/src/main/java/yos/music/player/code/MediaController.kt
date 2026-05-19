@@ -49,6 +49,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.collections.buildList
 import yos.music.player.MainActivity
 import yos.music.player.R
 import yos.music.player.code.MediaController.mediaControl
@@ -79,6 +80,15 @@ object MediaController {
 
     @Stable
     var playingMusicList = mutableStateOf<List<YosMediaItem>?>(null)
+
+    @Stable
+    var historyMusicList = mutableStateOf<List<YosMediaItem>>(emptyList())
+
+    @Stable
+    var orderedPlayingMusicList = mutableStateOf<List<YosMediaItem>>(emptyList())
+
+    @Stable
+    var queueShuffleEnabled = mutableStateOf(false)
 
     @Stable
     var mediaControl: MediaController? = null
@@ -204,63 +214,59 @@ object MediaController {
         play: Boolean = true
     ) {
         println("prepare $music")
-        if (thisMusicList != playingMusicList.value) {
 
-            var index = 0
+        if (thisMusicList.isEmpty()) {
+            return
+        }
 
-            val itemList = thisMusicList.mapIndexed { thisIndex, it ->
-                if (it.uri == music.uri) {
-                    index = thisIndex
-                }
-
-                it.toMediaItem()
-            }
-
-
-            withContext(Dispatchers.Main) {
-                mediaControl?.setMediaItems(itemList, index, position)
-                mediaControl?.prepare()
-            }
-
-            println("prepare 调用切列表")
-            if (!play && playingMusicList.value == null) {
-                playingMusicList.value = thisMusicList
-                //refresh(music)
-                withContext(Dispatchers.Main) {
-                    mediaControl?.shuffleModeEnabled = shuffleModeEnabled
-                    mediaControl?.repeatMode = repeatMode
-                    mediaControl?.let { YosPlaybackService().setCustomButtons(it) }
-                }
+        val targetIndex = thisMusicList.indexOfFirst { it.uri == music.uri }.let {
+            if (it == -1) {
+                0
             } else {
-                playingMusicList.value = thisMusicList
+                it
             }
-
-            if (play) {
-                withContext(Dispatchers.Main) {
-                    mediaControl?.fadePlay()
-                }
-            }
-
-            // 播放列表切换事件
-            println("prepare 尝试保存播放列表")
-            if (mainMusicList != null && playingMusicList.value != null) {
-                println("prepare 保存播放列表")
-                MusicLibrary.updatePlayList(
-                    PlayListV1(
-                        mainMusicList,
-                        playingMusicList.value
-                    )
+        }
+        val currentMusic = thisMusicList[targetIndex]
+        val orderedQueue = if (shuffleModeEnabled) {
+            buildList {
+                add(currentMusic)
+                addAll(
+                    thisMusicList.filterIndexed { index, _ ->
+                        index != targetIndex
+                    }.shuffled()
                 )
             }
-
         } else {
-            println("prepare 调用非切列表")
-            val index = thisMusicList.indexOf(music)
+            thisMusicList
+        }
+        val currentQueueIndex = if (shuffleModeEnabled) {
+            0
+        } else {
+            targetIndex
+        }
+
+        withContext(Dispatchers.Main) {
+            mediaControl?.setMediaItems(
+                orderedQueue.map { it.toMediaItem() },
+                currentQueueIndex,
+                position
+            )
+            mediaControl?.prepare()
+            mediaControl?.repeatMode = repeatMode
+            mediaControl?.let { YosPlaybackService().setCustomButtons(it) }
+        }
+
+        orderedPlayingMusicList.value = orderedQueue
+        queueShuffleEnabled.value = shuffleModeEnabled
+        syncQueueState(orderedQueue, currentQueueIndex, currentMusic)
+
+        if (play) {
             withContext(Dispatchers.Main) {
-                mediaControl?.seekToDefaultPosition(index)
                 mediaControl?.fadePlay()
             }
         }
+
+        saveQueueState()
     }
 
     suspend fun addToQueue(music: YosMediaItem): Boolean {
@@ -276,21 +282,21 @@ object MediaController {
         val currentQueue = currentQueueSnapshot(controller)
 
         if (currentQueue.isEmpty()) {
-            prepare(musicList.first(), musicList, play = false)
+            prepare(
+                musicList.first(),
+                musicList,
+                play = false,
+                shuffleModeEnabled = queueShuffleEnabled.value
+            )
             return true
         }
 
-        val insertAt = if (controller.shuffleModeEnabled) {
-            val nextMediaItemIndex = controller.nextMediaItemIndex
-
-            if (nextMediaItemIndex != C.INDEX_UNSET) {
-                nextMediaItemIndex
-            } else {
-                (controller.currentMediaItemIndex + 1).coerceAtLeast(0)
-            }
+        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val insertAt = if (queueShuffleEnabled.value) {
+            (currentIndex + 1).coerceAtMost(currentQueue.size)
         } else {
             currentQueue.size
-        }.coerceIn(0, currentQueue.size)
+        }
 
         val updatedQueue = currentQueue.toMutableList().also {
             it.addAll(insertAt, musicList)
@@ -300,25 +306,205 @@ object MediaController {
             controller.addMediaItems(insertAt, musicList.map { it.toMediaItem() })
         }
 
-        playingMusicList.value = updatedQueue
-        MusicLibrary.updatePlayList(
-            PlayListV1(
-                mainMusicList,
-                updatedQueue,
-            )
-        )
+        orderedPlayingMusicList.value = updatedQueue
+        syncQueueState(updatedQueue, currentIndex)
+        saveQueueState()
 
         return true
     }
 
+    suspend fun playNext(musicList: List<YosMediaItem>): Boolean {
+        if (musicList.isEmpty()) {
+            return false
+        }
+
+        val controller = mediaControl ?: return false
+        val currentQueue = currentQueueSnapshot(controller)
+
+        if (currentQueue.isEmpty()) {
+            prepare(
+                musicList.first(),
+                musicList,
+                play = false,
+                shuffleModeEnabled = queueShuffleEnabled.value
+            )
+            return true
+        }
+
+        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val insertAt = (currentIndex + 1).coerceAtMost(currentQueue.size)
+        val updatedQueue = currentQueue.toMutableList().also {
+            it.addAll(insertAt, musicList)
+        }
+
+        withContext(Dispatchers.Main) {
+            controller.addMediaItems(insertAt, musicList.map { it.toMediaItem() })
+        }
+
+        orderedPlayingMusicList.value = updatedQueue
+        syncQueueState(updatedQueue, currentIndex)
+        saveQueueState()
+
+        return true
+    }
+
+    suspend fun toggleShuffleMode(): Boolean {
+        val controller = mediaControl ?: return false
+        val currentQueue = currentQueueSnapshot(controller)
+
+        if (currentQueue.isEmpty()) {
+            queueShuffleEnabled.value = !queueShuffleEnabled.value
+            withContext(Dispatchers.Main) {
+                controller.shuffleModeEnabled = false
+                YosPlaybackService().setCustomButtons(controller)
+            }
+            saveQueueState()
+            return true
+        }
+
+        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val currentPosition = controller.currentPosition.coerceAtLeast(0L)
+        val updatedShuffleEnabled = !queueShuffleEnabled.value
+        val history = currentQueue.take(currentIndex)
+        val currentMusic = currentQueue.getOrNull(currentIndex) ?: return false
+        val upcoming = currentQueue.drop(currentIndex + 1)
+        val updatedQueue = if (updatedShuffleEnabled) {
+            buildList {
+                addAll(history)
+                add(currentMusic)
+                addAll(upcoming.shuffled())
+            }
+        } else {
+            currentQueue
+        }
+
+        withContext(Dispatchers.Main) {
+            controller.setMediaItems(
+                updatedQueue.map { it.toMediaItem() },
+                history.size,
+                currentPosition
+            )
+            controller.prepare()
+            controller.shuffleModeEnabled = false
+            YosPlaybackService().setCustomButtons(controller)
+            if (FadeExo.targetStatus != 0) {
+                controller.fadePlay()
+            }
+        }
+
+        orderedPlayingMusicList.value = updatedQueue
+        queueShuffleEnabled.value = updatedShuffleEnabled
+        syncQueueState(updatedQueue, history.size, currentMusic)
+        saveQueueState()
+
+        return true
+    }
+
+    suspend fun restoreQueueState(
+        music: YosMediaItem,
+        upcomingMusicList: List<YosMediaItem>,
+        historyQueue: List<YosMediaItem>,
+        position: Long,
+        shuffleModeEnabled: Boolean,
+        repeatMode: Int,
+        play: Boolean = false,
+    ) {
+        val restoredQueue = buildList {
+            addAll(historyQueue)
+            add(music)
+            addAll(upcomingMusicList)
+        }
+
+        if (restoredQueue.isEmpty()) {
+            return
+        }
+
+        val currentQueueIndex = historyQueue.size.coerceAtMost(restoredQueue.lastIndex)
+
+        withContext(Dispatchers.Main) {
+            mediaControl?.setMediaItems(
+                restoredQueue.map { it.toMediaItem() },
+                currentQueueIndex,
+                position
+            )
+            mediaControl?.prepare()
+            mediaControl?.repeatMode = repeatMode
+            mediaControl?.shuffleModeEnabled = false
+            mediaControl?.let { YosPlaybackService().setCustomButtons(it) }
+        }
+
+        orderedPlayingMusicList.value = restoredQueue
+        queueShuffleEnabled.value = shuffleModeEnabled
+        syncQueueState(restoredQueue, currentQueueIndex, music)
+
+        if (play) {
+            withContext(Dispatchers.Main) {
+                mediaControl?.fadePlay()
+            }
+        }
+
+        saveQueueState()
+    }
+
     private fun currentQueueSnapshot(controller: androidx.media3.session.MediaController): List<YosMediaItem> {
-        playingMusicList.value?.let {
+        orderedPlayingMusicList.value.takeIf { it.isNotEmpty() }?.let {
             return it
         }
 
         return List(controller.mediaItemCount) { index ->
             controller.getMediaItemAt(index).toYosMediaItem()
         }
+    }
+
+    private fun syncQueueState(
+        orderedQueue: List<YosMediaItem>,
+        currentQueueIndex: Int,
+        currentMusic: YosMediaItem? = null,
+    ) {
+        orderedPlayingMusicList.value = orderedQueue
+
+        if (orderedQueue.isEmpty()) {
+            historyMusicList.value = emptyList()
+            playingMusicList.value = emptyList()
+            musicPlaying.value = null
+            return
+        }
+
+        val boundedIndex = currentQueueIndex.coerceIn(0, orderedQueue.lastIndex)
+        val resolvedMusic = currentMusic ?: orderedQueue[boundedIndex]
+
+        historyMusicList.value = orderedQueue.take(boundedIndex)
+        playingMusicList.value = orderedQueue.drop(boundedIndex + 1)
+        musicPlaying.value = resolvedMusic
+        MediaViewModelObject.bitmap.value = resolvedMusic.thumb
+        MainViewModelObject.syncLyricIndex.intValue = -1
+    }
+
+    fun syncQueueStateFromController(controller: Player, currentMusic: YosMediaItem? = null) {
+        val orderedQueue = if (
+            orderedPlayingMusicList.value.isNotEmpty() &&
+            orderedPlayingMusicList.value.size == controller.mediaItemCount
+        ) {
+            orderedPlayingMusicList.value
+        } else {
+            List(controller.mediaItemCount) { index ->
+                controller.getMediaItemAt(index).toYosMediaItem()
+            }
+        }
+
+        syncQueueState(orderedQueue, controller.currentMediaItemIndex.coerceAtLeast(0), currentMusic)
+    }
+
+    fun saveQueueState() {
+        MusicLibrary.updatePlayList(
+            PlayListV1(
+                mainMusicList = mainMusicList,
+                playingMusicList = playingMusicList.value,
+                historyMusicList = historyMusicList.value,
+                musicPlaying = musicPlaying.value,
+                shuffleModeEnabled = queueShuffleEnabled.value,
+            )
+        )
     }
 
     fun onCase(mediaItem: YosMediaItem) {
@@ -371,7 +557,7 @@ class YosPlaybackService : MediaSessionService() {
             val useSmallerIcon = SettingsLibrary.NotificationSmallerIcon
 
             val shuffleButtonIcon =
-                if (player.shuffleModeEnabled) {
+                if (yos.music.player.code.MediaController.queueShuffleEnabled.value) {
                     if (useSmallerIcon) R.drawable.ic_mini_shuffle else R.drawable.ic_shuffle
                 } else {
                     if (useSmallerIcon) R.drawable.ic_mini_shuffle_off else R.drawable.ic_shuffle_off
@@ -405,7 +591,7 @@ class YosPlaybackService : MediaSessionService() {
             val useSmallerIcon = SettingsLibrary.NotificationSmallerIcon
 
             val shuffleButtonIcon =
-                if (player.shuffleModeEnabled) {
+                if (yos.music.player.code.MediaController.queueShuffleEnabled.value) {
                     if (useSmallerIcon) R.drawable.ic_mini_shuffle else R.drawable.ic_shuffle
                 } else {
                     if (useSmallerIcon) R.drawable.ic_mini_shuffle_off else R.drawable.ic_shuffle_off
@@ -475,11 +661,12 @@ class YosPlaybackService : MediaSessionService() {
                 PlayStatus(
                     musicPlaying.value,
                     mediaControl?.currentPosition ?: 0,
-                    mediaControl?.shuffleModeEnabled ?: false,
+                    yos.music.player.code.MediaController.queueShuffleEnabled.value,
                     mediaControl?.repeatMode ?: REPEAT_MODE_ALL
                 )
             )
         }
+        yos.music.player.code.MediaController.saveQueueState()
     }
 
     private fun prefetchArtwork(artwork: Any?) {
@@ -625,6 +812,10 @@ class YosPlaybackService : MediaSessionService() {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     /*mediaSession?.let { MediaController.sendNotification(it,context) }*/
                     mediaItem?.let {
+                        yos.music.player.code.MediaController.syncQueueStateFromController(
+                            player,
+                            it.toYosMediaItem()
+                        )
                         yos.music.player.code.MediaController.onCase(
                             it.toYosMediaItem()
                         )
@@ -719,8 +910,9 @@ class YosPlaybackService : MediaSessionService() {
                 args: Bundle
             ): ListenableFuture<SessionResult> {
                 if (customCommand.customAction == shuffleMode) {
-                    player.shuffleModeEnabled = !player.shuffleModeEnabled
-                    setCustomButtons(forwardingPlayer)
+                    CoroutineScope(Dispatchers.IO).launch {
+                        yos.music.player.code.MediaController.toggleShuffleMode()
+                    }
                 } else if (customCommand.customAction == repeatMode) {
                     when (player.repeatMode) {
                         REPEAT_MODE_OFF -> {

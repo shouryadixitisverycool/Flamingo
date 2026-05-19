@@ -297,33 +297,14 @@ fun NormalMusic(navController: NavController) {
                                 }
                                 if (songsInOrder.isEmpty()) return@launch
 
-                                val ctrl = MediaController.mediaControl
-                                val currentQueue = MediaController.playingMusicList.value
                                 val currentPlaying = MediaController.musicPlaying.value
 
-                                if (ctrl == null || currentQueue.isNullOrEmpty() || currentPlaying == null) {
+                                if (currentPlaying == null) {
                                     // Nothing is playing — start fresh
                                     // with the playlist as the new queue.
                                     MediaController.prepare(songsInOrder.first(), songsInOrder)
                                 } else {
-                                    val mediaItems = songsInOrder.map { it.toMediaItem() }
-                                    val insertAt = currentQueue.indexOfFirst {
-                                        it.uri == currentPlaying.uri
-                                    }.let { if (it < 0) 0 else it + 1 }
-
-                                    withContext(Dispatchers.Main) {
-                                        // Insert into the live player.
-                                        ctrl.addMediaItems(insertAt, mediaItems)
-                                    }
-                                    // Mirror the insert into the app's
-                                    // queue snapshot so PlayingList in
-                                    // NowPlaying re-renders. Done off
-                                    // the main thread since list
-                                    // assignment triggers Compose work.
-                                    val updated = currentQueue.toMutableList().also {
-                                        it.addAll(insertAt, songsInOrder)
-                                    }
-                                    MediaController.playingMusicList.value = updated
+                                    MediaController.playNext(songsInOrder)
                                 }
 
                                 withContext(Dispatchers.Main) {
@@ -478,9 +459,12 @@ fun NormalMusic(navController: NavController) {
                                     onClick = {
                                         if (list.value.isEmpty()) return@MusicDetailCircleButton
 
-                                        MediaController.mediaControl?.shuffleModeEnabled = true
                                         scope.launch(Dispatchers.IO) {
-                                            MediaController.prepare(list.value.random(), list.value)
+                                            MediaController.prepare(
+                                                list.value.random(),
+                                                list.value,
+                                                shuffleModeEnabled = true
+                                            )
                                         }
                                     },
                                 )
@@ -614,11 +598,11 @@ fun NormalMusic(navController: NavController) {
                                         return@NormalTopButton
                                     }
 
-                                    MediaController.mediaControl?.shuffleModeEnabled = true
                                     scope.launch(Dispatchers.IO) {
                                         MediaController.prepare(
                                             list.value.random(),
-                                            list.value
+                                            list.value,
+                                            shuffleModeEnabled = true
                                         )
                                     }
                                 }
@@ -944,7 +928,6 @@ fun FloatingMenuDivider() =
 private fun PlayListHeroArtwork(playList: PlayList) {
     val context = LocalContext.current
     val shape = YosRoundedCornerShape(18.dp)
-
     val songsInPlaylist = remember(playList.songDataList) {
         playList.songDataList.mapNotNull { uri ->
             yos.music.player.data.libraries.MusicLibrary.songs.firstOrNull { it.uri == uri }

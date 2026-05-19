@@ -138,6 +138,7 @@ import yos.music.player.code.MediaController
 import yos.music.player.code.MediaController.mediaControl
 import yos.music.player.code.MediaController.musicPlaying
 import yos.music.player.code.MediaController.playingMusicList
+import yos.music.player.code.MediaController.queueShuffleEnabled
 import yos.music.player.code.SystemMediaControlResolver
 import yos.music.player.code.VolumeChangeReceiver
 import yos.music.player.code.YosPlaybackService
@@ -247,7 +248,7 @@ fun NowPlaying(
         }
 
         val shuffleModeEnabled = rememberSaveable(key = "NowPlaying_shuffleModeEnabled") {
-            mutableStateOf(mediaControl?.shuffleModeEnabled ?: false)
+            mutableStateOf(queueShuffleEnabled.value)
         }
         val repeatMode = rememberSaveable(key = "NowPlaying_repeatMode") {
             mutableIntStateOf(mediaControl?.repeatMode ?: REPEAT_MODE_OFF)
@@ -687,7 +688,7 @@ fun NowPlaying(
                                             .padding(top = 52.dp),
                                         onWhile = {
                                             shuffleModeEnabled.value =
-                                                mediaControl?.shuffleModeEnabled ?: false
+                                                queueShuffleEnabled.value
                                             repeatMode.intValue =
                                                 mediaControl?.repeatMode ?: REPEAT_MODE_OFF
                                         })
@@ -763,6 +764,7 @@ private fun PlayingList(
     val musicList = remember("PlayingList_musicList") {
         playingMusicList
     }
+    val scope = rememberCoroutineScope()
 
     YosWrapper {
         Column(
@@ -772,7 +774,7 @@ private fun PlayingList(
         ) {
             val hide = remember("PlayingList_hide") {
                 derivedStateOf {
-                    musicList.value.isNullOrEmpty() || shuffleModeEnabledLambda()
+                    musicList.value.isNullOrEmpty()
                 }
             }
 
@@ -822,10 +824,10 @@ private fun PlayingList(
                                 .clickable(
                                     onClick = {
                                         Vibrator.click(context)
-                                        mediaControl?.shuffleModeEnabled =
-                                            !shuffleModeEnabledLambda()
-                                        mediaControl?.let { YosPlaybackService().setCustomButtons(it) }
                                         shuffleModeOnChanged(!shuffleModeEnabledLambda())
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.toggleShuffleMode()
+                                        }
                                     },
                                     indication = null,
                                     interactionSource = remember { MutableInteractionSource() })
@@ -937,17 +939,8 @@ private fun PlayingList(
                         modifier = Modifier.padding(top = 18.dp, bottom = 12.dp)
                     )
                     YosWrapper {
-                        val msg = remember("PlayingList_msg") {
-                            derivedStateOf {
-                                if (musicList.value.isNullOrEmpty()) {
-                                    R.string.playlist_unavailable_desc
-                                } else {
-                                    R.string.playlist_shuffle_desc
-                                }
-                            }
-                        }
                         Text(
-                            text = stringResource(id = msg.value),
+                            text = stringResource(id = R.string.playlist_unavailable_desc),
                             fontSize = 16.sp,
                             color = Color.White,
                             modifier = Modifier
@@ -957,12 +950,8 @@ private fun PlayingList(
                     }
                 }
             } else {
-                val musicIndex = remember(musicList.value, thisMusicPlayingLambda()) {
-                    musicList.value?.indexOf(musicPlaying.value) ?: 0
-                }
-                val scope = rememberCoroutineScope()
                 val state = rememberLazyListState(
-                    initialFirstVisibleItemIndex = musicIndex + 1,
+                    initialFirstVisibleItemIndex = 0,
                     initialFirstVisibleItemScrollOffset = -15
                 )
 

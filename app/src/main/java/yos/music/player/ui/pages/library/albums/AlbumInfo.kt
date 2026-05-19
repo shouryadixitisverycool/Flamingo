@@ -369,9 +369,12 @@ fun AlbumInfo(
                         val songsToPlay = displayedSongs.value
                         if (songsToPlay.isEmpty()) return@MusicDetailCircleButton
 
-                        MediaController.mediaControl?.shuffleModeEnabled = true
                         scope.launch(Dispatchers.IO) {
-                            MediaController.prepare(songsToPlay.random(), songsToPlay)
+                            MediaController.prepare(
+                                songsToPlay.random(),
+                                songsToPlay,
+                                shuffleModeEnabled = true
+                            )
                         }
                     },
                 )

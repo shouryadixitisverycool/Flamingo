@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import yos.music.player.code.MediaController.mediaControl
+import yos.music.player.code.MediaController.musicPlaying
 import yos.music.player.code.MediaController.playingMusicList
 import yos.music.player.code.YosPlaybackService
 import yos.music.player.data.libraries.Folder
@@ -104,7 +105,17 @@ class YosBasicApplication : Application() {
                                 }
                             }*/
 
-                            if (playStatusData.music != null) {
+                            if (playListData.musicPlaying != null) {
+                                yos.music.player.code.MediaController.restoreQueueState(
+                                    playListData.musicPlaying,
+                                    playListData.playingMusicList ?: emptyList(),
+                                    playListData.historyMusicList ?: emptyList(),
+                                    playStatusData.position,
+                                    playListData.shuffleModeEnabled,
+                                    playStatusData.repeatMode,
+                                    false
+                                )
+                            } else if (playStatusData.music != null) {
                                 yos.music.player.code.MediaController.prepare(
                                     playStatusData.music,
                                     playListData.playingMusicList!!,
@@ -117,6 +128,10 @@ class YosBasicApplication : Application() {
 
                             if (playListData.playingMusicList != null) {
                                 playingMusicList.value = playListData.playingMusicList
+                            }
+
+                            if (playListData.musicPlaying != null) {
+                                musicPlaying.value = playListData.musicPlaying
                             }
                         }
                     } catch (e:Exception) {
