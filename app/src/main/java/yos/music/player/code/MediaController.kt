@@ -291,7 +291,9 @@ object MediaController {
             return true
         }
 
-        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val currentIndex = withContext(Dispatchers.Main) {
+            controller.currentMediaItemIndex.coerceAtLeast(0)
+        }
         val insertAt = if (queueShuffleEnabled.value) {
             (currentIndex + 1).coerceAtMost(currentQueue.size)
         } else {
@@ -331,7 +333,9 @@ object MediaController {
             return true
         }
 
-        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val currentIndex = withContext(Dispatchers.Main) {
+            controller.currentMediaItemIndex.coerceAtLeast(0)
+        }
         val insertAt = (currentIndex + 1).coerceAtMost(currentQueue.size)
         val updatedQueue = currentQueue.toMutableList().also {
             it.addAll(insertAt, musicList)
@@ -362,8 +366,12 @@ object MediaController {
             return true
         }
 
-        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
-        val currentPosition = controller.currentPosition.coerceAtLeast(0L)
+        val currentIndex = withContext(Dispatchers.Main) {
+            controller.currentMediaItemIndex.coerceAtLeast(0)
+        }
+        val currentPosition = withContext(Dispatchers.Main) {
+            controller.currentPosition.coerceAtLeast(0L)
+        }
         val updatedShuffleEnabled = !queueShuffleEnabled.value
         val history = currentQueue.take(currentIndex)
         val currentMusic = currentQueue.getOrNull(currentIndex) ?: return false
@@ -446,13 +454,15 @@ object MediaController {
         saveQueueState()
     }
 
-    private fun currentQueueSnapshot(controller: androidx.media3.session.MediaController): List<YosMediaItem> {
+    private suspend fun currentQueueSnapshot(controller: androidx.media3.session.MediaController): List<YosMediaItem> {
         orderedPlayingMusicList.value.takeIf { it.isNotEmpty() }?.let {
             return it
         }
 
-        return List(controller.mediaItemCount) { index ->
-            controller.getMediaItemAt(index).toYosMediaItem()
+        return withContext(Dispatchers.Main) {
+            List(controller.mediaItemCount) { index ->
+                controller.getMediaItemAt(index).toYosMediaItem()
+            }
         }
     }
 
