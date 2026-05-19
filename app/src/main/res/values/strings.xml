@@ -19,6 +19,10 @@
     <string name="settings_library_refresh_now">Refresh Media Library</string>
     <string name="settings_library_refresh_now_desc">Refresh the media library immediately.</string>
     <string name="settings_library_overview">Media Library Overview</string>
+    <string name="settings_library_artist_split_title">Artist Separators</string>
+    <string name="settings_library_artist_split_desc">Customize how artist names split into separate artists.</string>
+    <string name="settings_library_artist_split_hint">Use one separator per line. Default: ,</string>
+    <string name="settings_library_artist_split_placeholder">Enter one separator per line</string>
     <string name="settings_audio">Audio</string>
     <string name="settings_audio_fade_in_out">Fade In / Fade Out</string>
     <string name="settings_audio_exoplayer">ExoPlayer Options</string>
@@ -74,11 +78,15 @@
     <string name="album_sort_track_number">Track Number</string>
     <string name="album_action_favorite">Favorite album</string>
     <string name="album_action_unfavorite">Remove album from favorites</string>
+    <string name="artist_action_follow">Follow artist</string>
+    <string name="artist_action_unfollow">Unfollow artist</string>
     <string name="music_detail_search_cd">Search in %1$s</string>
     <string name="normal_button_play">Play</string>
     <string name="normal_button_shuffle">Shuffle</string>
     <string name="page_library_album_info_others">%1$d Songs, about %2$d minutes</string>
     <string name="page_library_artists">Artists</string>
+    <string name="page_library_artist_singles">Singles &amp; EPs</string>
+    <string name="page_library_artist_featured_on">Featured on</string>
     <string name="page_library_playlists">Playlists</string>
     <string name="page_library_search_songs">Search in Songs</string>
     <string name="page_library_search_artists">Search in Artists</string>

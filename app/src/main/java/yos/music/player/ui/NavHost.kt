@@ -25,6 +25,8 @@ interface UI {
         const val LocalAlbums = "LocalAlbums"
 
         const val AlbumInfo = "AlbumInfo"
+        const val ArtistInfo = "ArtistInfo"
+        const val ArtistSongs = "ArtistSongs"
     }
 
     @Stable
@@ -32,6 +34,7 @@ interface UI {
         companion object {
             const val Main = "Main"
             const val LibraryOverview = "LibraryOverview"
+            const val ArtistSplit = "ArtistSplit"
 
             const val LyricGetter = "LyricGetter"
             const val ExoplayerSetting = "ExoplayerSetting"

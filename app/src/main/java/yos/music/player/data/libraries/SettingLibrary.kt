@@ -1,11 +1,48 @@
 package yos.music.player.data.libraries
 
 import androidx.compose.runtime.Stable
+import com.funny.data_saver.core.mutableDataSaverListStateOf
 import com.funny.data_saver.core.mutableDataSaverStateOf
 import yos.music.player.data.SettingsSaver
 
 @Stable
 object SettingsLibrary {
+
+    @Stable
+    private var followedArtistsSaver by mutableDataSaverListStateOf(
+        dataSaverInterface = SettingsSaver,
+        key = "settings_library_followed_artists",
+        initialValue = listOf<YosStringWrapper>()
+    )
+
+    val FollowedArtists: List<String>
+        get() = followedArtistsSaver.map { it.value }
+
+    fun isArtistFollowed(artistName: String): Boolean
+    {
+        return FollowedArtists.contains(artistName)
+    }
+
+    fun followArtist(artistName: String)
+    {
+        if (!isArtistFollowed(artistName)) {
+            followedArtistsSaver = followedArtistsSaver + YosStringWrapper(artistName)
+        }
+    }
+
+    fun unfollowArtist(artistName: String)
+    {
+        followedArtistsSaver = followedArtistsSaver - YosStringWrapper(artistName)
+    }
+
+    fun toggleArtistFollowed(artistName: String)
+    {
+        if (isArtistFollowed(artistName)) {
+            unfollowArtist(artistName)
+        } else {
+            followArtist(artistName)
+        }
+    }
 
     /**
      * 是否显示音量条
@@ -90,6 +127,13 @@ object SettingsLibrary {
         dataSaverInterface = SettingsSaver,
         key = "settings_library_refresh_everytime",
         initialValue = false
+    )
+
+    @Stable
+    var ArtistSplitSeparators by mutableDataSaverStateOf(
+        dataSaverInterface = SettingsSaver,
+        key = "settings_library_artist_split_separators",
+        initialValue = ","
     )
 
     /**

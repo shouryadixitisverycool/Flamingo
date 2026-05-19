@@ -53,6 +53,13 @@ fun Settings(navController: NavController) =
                             LabelItem(title = stringResource(id = R.string.settings_library_overview)) {
                                 navController.toUI(UI.Settings.LibraryOverview)
                             }
+                            Divider()
+                            LabelItem(
+                                title = stringResource(id = R.string.settings_library_artist_split_title),
+                                desc = stringResource(id = R.string.settings_library_artist_split_desc),
+                            ) {
+                                navController.toUI(UI.Settings.ArtistSplit)
+                            }
                         }
 
                         GroupSpacerMedium()

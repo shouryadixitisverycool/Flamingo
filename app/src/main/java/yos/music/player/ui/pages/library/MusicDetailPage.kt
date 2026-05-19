@@ -65,6 +65,8 @@ fun MusicDetailPage(
     searchText: String,
     searchPlaceholder: String,
     enableSearch: Boolean,
+    showSortButton: Boolean = true,
+    showSearchButton: Boolean = enableSearch,
     searchModeActive: Boolean,
     searchRequestFocusSignal: Int,
     onBack: () -> Unit,
@@ -198,6 +200,8 @@ fun MusicDetailPage(
         MusicDetailTopBar(
             title = title,
             collapseProgress = collapseProgress,
+            showSortButton = showSortButton,
+            showSearchButton = showSearchButton,
             searchModeActive = searchModeActive,
             onBack = if (searchModeActive) {
                 onSearchDismiss
@@ -329,6 +333,8 @@ fun MusicDetailPillDivider() {
 private fun MusicDetailTopBar(
     title: String,
     collapseProgress: Float,
+    showSortButton: Boolean,
+    showSearchButton: Boolean,
     searchModeActive: Boolean,
     onBack: () -> Unit,
     onSort: () -> Unit,
@@ -368,31 +374,58 @@ private fun MusicDetailTopBar(
                     onClick = onBack,
                 )
 
-                Row(
-                    modifier = Modifier
-                        .height(44.dp)
-                        .clip(YosRoundedCornerShape(18.dp))
-                        .background(surfaceColor)
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MusicDetailTopBarInlineButton(
+                if (showSortButton && showSearchButton) {
+                    Row(
+                        modifier = Modifier
+                            .height(44.dp)
+                            .clip(YosRoundedCornerShape(18.dp))
+                            .background(surfaceColor)
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MusicDetailTopBarInlineButton(
+                            painter = painterResource(id = R.drawable.ic_action_sort),
+                            contentDescription = stringResource(R.string.playlist_sort_title),
+                            iconTint = iconTint,
+                            onClick = onSort,
+                        )
+
+                        Spacer(
+                            modifier = Modifier
+                                .padding(vertical = 6.dp)
+                                .width(1.dp)
+                                .fillMaxHeight()
+                                .alpha(0.12f)
+                                .background(iconTint),
+                        )
+
+                        MusicDetailTopBarInlineButton(
+                            painter = painterResource(
+                                id = if (searchModeActive) {
+                                    R.drawable.ic_action_close
+                                } else {
+                                    R.drawable.ic_action_search
+                                },
+                            ),
+                            contentDescription = if (searchModeActive) {
+                                stringResource(R.string.playlist_search_clear_cd)
+                            } else {
+                                searchTitle(title)
+                            },
+                            iconTint = iconTint,
+                            onClick = onSearchClick,
+                        )
+                    }
+                } else if (showSortButton) {
+                    MusicDetailTopBarButton(
                         painter = painterResource(id = R.drawable.ic_action_sort),
                         contentDescription = stringResource(R.string.playlist_sort_title),
+                        surfaceColor = surfaceColor,
                         iconTint = iconTint,
                         onClick = onSort,
                     )
-
-                    Spacer(
-                        modifier = Modifier
-                            .padding(vertical = 6.dp)
-                            .width(1.dp)
-                            .fillMaxHeight()
-                            .alpha(0.12f)
-                            .background(iconTint),
-                    )
-
-                    MusicDetailTopBarInlineButton(
+                } else if (showSearchButton) {
+                    MusicDetailTopBarButton(
                         painter = painterResource(
                             id = if (searchModeActive) {
                                 R.drawable.ic_action_close
@@ -405,6 +438,7 @@ private fun MusicDetailTopBar(
                         } else {
                             searchTitle(title)
                         },
+                        surfaceColor = surfaceColor,
                         iconTint = iconTint,
                         onClick = onSearchClick,
                     )

@@ -53,8 +53,13 @@ import coil.size.Precision
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import yos.music.player.R
+import yos.music.player.data.libraries.ArtistLibrary
 import yos.music.player.data.libraries.MusicLibrary
+import yos.music.player.data.libraries.SettingsLibrary
+import yos.music.player.data.objects.LibraryObject
+import yos.music.player.ui.UI
 import yos.music.player.ui.theme.withNight
+import yos.music.player.ui.toUI
 import yos.music.player.ui.widgets.basic.SearchTextField
 import yos.music.player.ui.widgets.basic.Title
 import yos.music.player.ui.widgets.basic.YosWrapper
@@ -66,7 +71,7 @@ fun LocalArtists(navController: NavController) {
             .fillMaxSize()
         /*.statusBarsPadding()*/
     ) {
-        val artistsList = MusicLibrary.artists
+        val artistsList = ArtistLibrary.sortedArtists(MusicLibrary.artists)
 
         val searchText = remember("LocalArtists_searchText") {
             mutableStateOf("")
@@ -99,14 +104,14 @@ fun LocalArtists(navController: NavController) {
             }
         } else {
             val useSearch = remember { derivedStateOf { searchText.value.isNotEmpty() } }
-            val list = remember { mutableStateOf(artistsList) }
+            val list = remember(artistsList) { mutableStateOf(artistsList) }
 
             YosWrapper {
-                LaunchedEffect(searchText.value) {
+                LaunchedEffect(searchText.value, artistsList) {
                     withContext(Dispatchers.IO) {
                         val filteredList = withContext(Dispatchers.IO) {
                             if (useSearch.value) {
-                                MusicLibrary.artists.asSequence().filter { artist ->
+                                ArtistLibrary.sortedArtists(MusicLibrary.artists).asSequence().filter { artist ->
                                     artist.contains(searchText.value, ignoreCase = true)
                                 }.toList()
                             } else {
@@ -149,11 +154,13 @@ fun LocalArtists(navController: NavController) {
                     contentType = { _, _ -> "LocalArtists_item" }*/
                 ) { index, artist ->
                     ArtistItem(artistName = artist) {
-
+                        LibraryObject.setTargetArtistName(artist)
+                        LibraryObject.setArtistSongsSearchOnOpen(false)
+                        navController.toUI(UI.ArtistInfo)
                     }
 
                     key(index) {
-                        val needDivider = index < artistsList.size - 1
+                        val needDivider = index < list.value.size - 1
                         if (needDivider) {
                             Spacer(
                                 modifier = Modifier
@@ -244,6 +251,17 @@ private fun LazyItemScope.ArtistItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = 20.sp
+            )
+        }
+
+        if (SettingsLibrary.isArtistFollowed(artistName)) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_nowplaying_favorited),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(19.dp)
+                    .padding(end = 10.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
         }
 

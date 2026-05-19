@@ -126,12 +126,15 @@ import yos.music.player.ui.pages.library.Library
 import yos.music.player.ui.pages.library.NormalMusic
 import yos.music.player.ui.pages.library.albums.AlbumInfo
 import yos.music.player.ui.pages.library.albums.LocalAlbums
+import yos.music.player.ui.pages.library.artists.ArtistInfo
+import yos.music.player.ui.pages.library.artists.ArtistSongs
 import yos.music.player.ui.pages.library.artists.LocalArtists
 import yos.music.player.ui.pages.library.playlists.PlayLists
 import yos.music.player.ui.pages.settings.Settings
 import yos.music.player.ui.pages.settings.audio.exoPlayer.ExoPlayerSettings
 import yos.music.player.ui.pages.settings.audio.exoPlayer.MediaCodec
 import yos.music.player.ui.pages.settings.extend.statusBarLyric.LyricGetter
+import yos.music.player.ui.pages.settings.library.ArtistSplitSetting
 import yos.music.player.ui.pages.settings.library.LibraryOverview
 import yos.music.player.ui.pages.settings.others.About
 import yos.music.player.ui.pages.settings.performance.LyricSetting
@@ -453,6 +456,12 @@ class MainActivity : BaseActivity() {
                                             composable(UI.LocalArtists) {
                                                 LocalArtists(navController)
                                             }
+                                            composable(UI.ArtistInfo) {
+                                                ArtistInfo(navController)
+                                            }
+                                            composable(UI.ArtistSongs) {
+                                                ArtistSongs(navController)
+                                            }
 
                                             composable(UI.AlbumInfo) {
                                                 AlbumInfo(
@@ -469,6 +478,9 @@ class MainActivity : BaseActivity() {
                                             }
                                             composable(UI.Settings.LibraryOverview) {
                                                 LibraryOverview(navController)
+                                            }
+                                            composable(UI.Settings.ArtistSplit) {
+                                                ArtistSplitSetting(navController)
                                             }
                                             composable(UI.Settings.LyricGetter) {
                                                 LyricGetter(navController)

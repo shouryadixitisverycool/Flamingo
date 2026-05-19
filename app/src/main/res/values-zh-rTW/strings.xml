@@ -19,6 +19,10 @@
     <string name="settings_library_refresh_now">刷新媒體庫</string>
     <string name="settings_library_refresh_now_desc">立即刷新媒體庫。</string>
     <string name="settings_library_overview">媒體庫概覽</string>
+    <string name="settings_library_artist_split_title">Artist Separators</string>
+    <string name="settings_library_artist_split_desc">Customize how artist names split into separate artists.</string>
+    <string name="settings_library_artist_split_hint">Use one separator per line. Default: ,</string>
+    <string name="settings_library_artist_split_placeholder">Enter one separator per line</string>
     <string name="settings_audio">音訊</string>
     <string name="settings_audio_fade_in_out">淡入 / 淡出</string>
     <string name="settings_audio_exoplayer">ExoPlayer 選項</string>
@@ -74,11 +78,15 @@
     <string name="album_sort_track_number">曲目編號</string>
     <string name="album_action_favorite">收藏專輯</string>
     <string name="album_action_unfavorite">取消收藏專輯</string>
+    <string name="artist_action_follow">Follow artist</string>
+    <string name="artist_action_unfollow">Unfollow artist</string>
     <string name="music_detail_search_cd">在 %1$s 中搜尋</string>
     <string name="normal_button_play">播放</string>
     <string name="normal_button_shuffle">隨機播放</string>
     <string name="page_library_album_info_others">%1$d 首歌曲, 約 %2$d 分鐘</string>
     <string name="page_library_artists">藝人</string>
+    <string name="page_library_artist_singles">Singles &amp; EPs</string>
+    <string name="page_library_artist_featured_on">Featured on</string>
     <string name="page_library_playlists">播放列表</string>
     <string name="page_library_search_songs">在歌曲中搜索</string>
     <string name="page_library_search_artists">在藝人中搜索</string>
