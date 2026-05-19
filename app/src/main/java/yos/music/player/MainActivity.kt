@@ -105,7 +105,6 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import uk.akane.libphonograph.hasScopedStorageWithMediaTypes
 import yos.music.player.code.MediaController
 import yos.music.player.code.SystemMediaControlResolver
 import yos.music.player.code.utils.others.Vibrator
@@ -1245,14 +1244,13 @@ class MainActivity : BaseActivity() {
         val requestPermissionLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissions ->
-            val isGranted = permissions.entries.all { it.value }
-            if (isGranted) {
-                // Load music list here
+            val audioPermissionGranted = MusicLibrary.hasAudioPermission(context)
+            if (audioPermissionGranted) {
                 loadMusic(context, enforce = true)
+            }
+
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || permissions[Manifest.permission.BLUETOOTH_CONNECT] != false) {
                 sendBroadcast(Intent("yos.music.player.BLUETOOTH_STATUS_REFRESH"))
-            } else {
-                // Set music list to empty if permission is denied
-                // mainMusicList.value = mutableListOf()
             }
         }
 
@@ -1261,26 +1259,11 @@ class MainActivity : BaseActivity() {
 
                 var permissions = emptyArray<String>()
 
-                if ((hasScopedStorageWithMediaTypes()
-                            && ContextCompat.checkSelfPermission(
-                        context,
+                if (!MusicLibrary.hasAudioPermission(context)) {
+                    permissions += if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         Manifest.permission.READ_MEDIA_AUDIO
-                    ) != PackageManager.PERMISSION_GRANTED)
-                    /*|| (!hasScopedStorageV2()
-                            && ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE
-                    ) != PackageManager.PERMISSION_GRANTED)*/
-                    || (!hasScopedStorageWithMediaTypes()
-                            && ContextCompat.checkSelfPermission(
-                        context,
+                    } else {
                         Manifest.permission.READ_EXTERNAL_STORAGE
-                    ) != PackageManager.PERMISSION_GRANTED)
-                ) {
-                    permissions += arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-
-                    if (hasScopedStorageWithMediaTypes()) {
-                        permissions += arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
                     }
                 }
 
@@ -1381,6 +1364,10 @@ class MainActivity : BaseActivity() {
     }*/
 
     private fun loadMusic(context: Context, enforce: Boolean = false) {
+        if (!MusicLibrary.hasAudioPermission(context)) {
+            return
+        }
+
         val needRefresh = SettingsLibrary.RefreshEveryTime
         if (needRefresh || enforce) {
             mediaViewModel.viewModelScope.launch(Dispatchers.IO) {

@@ -2,12 +2,16 @@
 
 package yos.music.player.data.libraries
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.util.fastMap
+import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.funny.data_saver.core.mutableDataSaverListStateOf
@@ -135,6 +139,16 @@ object MusicLibrary {
     private var hideFoldersSaver by mutableDataSaverListStateOf(
         dataSaverInterface = NormalSaver, key = "hide_folders", initialValue = listOf<YosStringWrapper>()
     )
+
+    fun hasAudioPermission(context: Context): Boolean {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+
+        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    }
 
     val hideFolders: List<String>
         get() = hideFoldersSaver.map { it.value }
@@ -394,8 +408,12 @@ object MusicLibrary {
         shouldIncludeExtraFormat = true
     )
 
-    suspend fun scanMedia(context: Context): ReaderResult<MediaItem> {
+    suspend fun scanMedia(context: Context): ReaderResult<MediaItem>? {
         return withContext(Dispatchers.IO) {
+            if (!hasAudioPermission(context)) {
+                return@withContext null
+            }
+
             val result = Reader.readFromMediaStore(
                 context,
                 readerConfiguration

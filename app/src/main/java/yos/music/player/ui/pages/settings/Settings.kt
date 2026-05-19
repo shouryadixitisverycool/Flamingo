@@ -70,6 +70,12 @@ fun Settings(navController: NavController) =
                                         Toast.LENGTH_SHORT
                                     )
                                     toast.show()
+                                    if (!MusicLibrary.hasAudioPermission(context)) {
+                                        toast.cancel()
+                                        Toast.makeText(context, R.string.permission_grant_subtitle, Toast.LENGTH_SHORT).show()
+                                        return@launch
+                                    }
+
                                     withContext(Dispatchers.IO) {
                                         MusicLibrary.scanMedia(context)
                                     }
