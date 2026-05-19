@@ -5,9 +5,31 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { inputStream ->
+        localProperties.load(inputStream)
+    }
+}
+
 android {
     namespace 'yos.music.player'
     compileSdk 34
+
+    signingConfigs {
+        release {
+            def releaseStoreFile = localProperties.getProperty("flamingo.release.storeFile")
+
+            if (releaseStoreFile != null) {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword localProperties.getProperty("flamingo.release.storePassword")
+                keyAlias localProperties.getProperty("flamingo.release.keyAlias")
+                keyPassword localProperties.getProperty("flamingo.release.keyPassword")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId "yos.music.player"
@@ -31,6 +53,7 @@ android {
             minifyEnabled true
             zipAlignEnabled true
             shrinkResources true
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             applicationVariants.all { variant ->
                 variant.outputs.all {
