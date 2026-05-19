@@ -210,7 +210,7 @@ object MediaController {
         thisMusicList: List<YosMediaItem>,
         position: Long = 0L,
         shuffleModeEnabled: Boolean = false,
-        repeatMode: Int = REPEAT_MODE_ALL,
+        repeatMode: Int? = null,
         play: Boolean = true
     ) {
         println("prepare $music")
@@ -245,6 +245,10 @@ object MediaController {
             targetIndex
         }
 
+        val resolvedRepeatMode = repeatMode ?: withContext(Dispatchers.Main) {
+            mediaControl?.repeatMode ?: REPEAT_MODE_OFF
+        }
+
         withContext(Dispatchers.Main) {
             mediaControl?.setMediaItems(
                 orderedQueue.map { it.toMediaItem() },
@@ -252,7 +256,7 @@ object MediaController {
                 position
             )
             mediaControl?.prepare()
-            mediaControl?.repeatMode = repeatMode
+            mediaControl?.repeatMode = resolvedRepeatMode
             mediaControl?.let { YosPlaybackService().setCustomButtons(it) }
         }
 
@@ -369,9 +373,6 @@ object MediaController {
         val currentIndex = withContext(Dispatchers.Main) {
             controller.currentMediaItemIndex.coerceAtLeast(0)
         }
-        val currentPosition = withContext(Dispatchers.Main) {
-            controller.currentPosition.coerceAtLeast(0L)
-        }
         val updatedShuffleEnabled = !queueShuffleEnabled.value
         val history = currentQueue.take(currentIndex)
         val currentMusic = currentQueue.getOrNull(currentIndex) ?: return false
@@ -387,17 +388,15 @@ object MediaController {
         }
 
         withContext(Dispatchers.Main) {
-            controller.setMediaItems(
-                updatedQueue.map { it.toMediaItem() },
-                history.size,
-                currentPosition
-            )
-            controller.prepare()
             controller.shuffleModeEnabled = false
-            YosPlaybackService().setCustomButtons(controller)
-            if (FadeExo.targetStatus != 0) {
-                controller.fadePlay()
+            if (upcoming.isNotEmpty()) {
+                controller.replaceMediaItems(
+                    currentIndex + 1,
+                    controller.mediaItemCount,
+                    updatedQueue.drop(currentIndex + 1).map { it.toMediaItem() }
+                )
             }
+            YosPlaybackService().setCustomButtons(controller)
         }
 
         orderedPlayingMusicList.value = updatedQueue
