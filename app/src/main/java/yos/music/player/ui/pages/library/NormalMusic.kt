@@ -509,7 +509,12 @@ fun NormalMusic(navController: NavController) {
                                 list.value,
                                 key = { index, music -> "$index:${music.uri}" },
                             ) { index, music ->
-                                MusicList(music = music) {
+                                MusicList(
+                                    music = music,
+                                    onQueueSwipe = {
+                                        MediaController.addToQueue(music)
+                                    },
+                                ) {
                                     scope.launch(Dispatchers.IO) {
                                         MediaController.prepare(music, list.value)
                                     }
@@ -624,7 +629,12 @@ fun NormalMusic(navController: NavController) {
                             list.value,
                             key = { index, music -> "$index:${music.uri}" },
                         ) { index, music ->
-                            MusicList(music = music) {
+                            MusicList(
+                                music = music,
+                                onQueueSwipe = {
+                                    MediaController.addToQueue(music)
+                                },
+                            ) {
                                 scope.launch(Dispatchers.IO) {
                                     MediaController.prepare(music, list.value)
                                 }

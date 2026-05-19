@@ -195,6 +195,7 @@
     <string name="playlist_edit_remove_cd">Toggle remove</string>
     <string name="playlist_play_next_toast_one">1 song added to Up Next</string>
     <string name="playlist_play_next_toast_other">%d songs added to Up Next</string>
+    <string name="queue_added_toast">キューに追加しました</string>
     <string name="playlist_delete_undo_message">Deleted “%1$s”</string>
     <string name="playlist_delete_undo_action">Undo</string>
     <string name="playlist_pin_toast">Pinned “%1$s”</string>

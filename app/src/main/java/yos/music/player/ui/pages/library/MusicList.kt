@@ -1,24 +1,55 @@
 package yos.music.player.ui.pages.library
 
+import android.widget.Toast
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import yos.music.player.R
+import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.libraries.artistsName
 import yos.music.player.data.libraries.defaultArtistsName
@@ -38,77 +69,157 @@ fun /*LazyItemScope.*/MusicList(
     horizontalPadding: Dp = 22.dp,
     leadingContent: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable (RowScope.() -> Unit))? = null,
+    onQueueSwipe: (suspend () -> Boolean)? = null,
     itemClick: () -> Unit,
 ) {
-    /*rememberSaveable(stateSaver = object : Saver<String?, Any> {
-    override fun restore(value: Any): String? {
-        return value as String?
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
+    val addedToQueueToast = stringResource(id = R.string.queue_added_toast)
+    var rowWidthPx by remember(music.uri) {
+        mutableFloatStateOf(0f)
+    }
+    var rowHeightPx by remember(music.uri) {
+        mutableFloatStateOf(0f)
+    }
+    var swipeOffsetPx by remember(music.uri) {
+        mutableFloatStateOf(0f)
+    }
+    var resetAnimationJob by remember(music.uri) {
+        mutableStateOf<Job?>(null)
     }
 
-    override fun SaverScope.save(value: String?): Any {
-        return value ?: ""
+    val swipeEnabled = onQueueSwipe != null
+    val triggerOffsetPx = rowWidthPx * 0.20f
+    val maxSwipeOffsetPx = rowWidthPx
+    val swipeProgress = if (maxSwipeOffsetPx > 0f) {
+        (swipeOffsetPx / maxSwipeOffsetPx).coerceIn(0f, 1f)
+    } else {
+        0f
     }
-}) {
-    mutableStateOf(null)
+    val rowHeight = with(density) {
+        rowHeightPx.toDp()
+    }
+    val swipeRevealWidth = with(density) {
+        swipeOffsetPx.toDp()
+    }
+
+    val dragModifier = if (swipeEnabled) {
+        Modifier.draggable(
+            orientation = Orientation.Horizontal,
+            state = rememberDraggableState { delta ->
+                if (rowWidthPx <= 0f) {
+                    return@rememberDraggableState
+                }
+
+                resetAnimationJob?.cancel()
+
+                val wasPastThreshold = swipeOffsetPx >= triggerOffsetPx
+                swipeOffsetPx = (swipeOffsetPx + delta).coerceIn(0f, maxSwipeOffsetPx)
+                val isPastThreshold = swipeOffsetPx >= triggerOffsetPx
+
+                if (wasPastThreshold != isPastThreshold) {
+                    if (isPastThreshold) {
+                        Vibrator.longClick(context)
+                    } else {
+                        Vibrator.click(context)
+                    }
+                }
+            },
+            onDragStopped = {
+                val shouldAddToQueue = triggerOffsetPx > 0f && swipeOffsetPx >= triggerOffsetPx
+
+                resetAnimationJob?.cancel()
+                resetAnimationJob = coroutineScope.launch {
+                    if (shouldAddToQueue && onQueueSwipe?.invoke() == true) {
+                        Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
+                    }
+
+                    val animationStart = swipeOffsetPx
+
+                    animate(
+                        initialValue = animationStart,
+                        targetValue = 0f,
+                        animationSpec = tween(durationMillis = 180),
+                    ) { value, _ ->
+                        swipeOffsetPx = value
+                    }
+                }
+            },
+        )
+    } else {
+        Modifier
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clipToBounds()
+            .onSizeChanged {
+                rowWidthPx = it.width.toFloat()
+                rowHeightPx = it.height.toFloat()
+            }
+    ) {
+        if (swipeEnabled) {
+            Box(
+                modifier = Modifier
+                    .width(swipeRevealWidth)
+                    .height(rowHeight)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_swipe_queue),
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .graphicsLayer {
+                            val iconScale = 0.82f + (swipeProgress * 0.18f)
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        },
+                )
+            }
+        }
+
+        MusicListRow(
+            music = music,
+            modifier = Modifier
+                .offset {
+                    IntOffset(swipeOffsetPx.roundToInt(), 0)
+                }
+                .background(MaterialTheme.colorScheme.background)
+                .then(dragModifier),
+            titleText = titleText,
+            subtitleText = subtitleText,
+            showArtwork = showArtwork,
+            artworkSize = artworkSize,
+            leadingWidth = leadingWidth,
+            horizontalPadding = horizontalPadding,
+            leadingContent = leadingContent,
+            trailingContent = trailingContent,
+            itemClick = itemClick,
+        )
+    }
 }
 
-LaunchedEffect(Unit) {
-    val path = context.filesDir.absolutePath + "/${music().ID}.png"
-    thumb.value = path
-}*/
-
-    /*val background = Color(Color.Transparent.toArgb())
-    val originalColor = rememberSaveable(music()) {
-        mutableStateOf(0)
-    }
-    val duration = rememberSaveable(music()) {
-        mutableStateOf("00:00")
-    }
-    if (duration.value == "00:00") {
-        YosWrapper {
-            LaunchedEffect(Unit) {
-                val time = MusicScanner(context).timeConversion(music().duration)
-                duration.value = time.min + ":" + time.sec
-            }
-        }
-    }
-    if (originalColor.value == 0) {
-        if (thumb != null && music() == musicPlaying.value) {
-            val thumb = context.filesDir.absolutePath + "/${music().ID}.jpg"
-            val bitmap = if (File(thumb).exists()) BitmapFactory.decodeFile(thumb) else null
-            if (bitmap != null) {
-                val builder = Palette.from(bitmap)
-                val palette = builder.generate()
-                originalColor.value =
-                    Color(palette.getLightVibrantColor(background.toArgb())).toArgb()
-                if (originalColor.value == background.toArgb()) {
-                    originalColor.value =
-                        Color(palette.getVibrantColor(background.toArgb())).toArgb()
-                }
-                if (originalColor.value == background.toArgb()) {
-                    originalColor.value =
-                        Color(palette.getLightMutedColor(background.toArgb())).toArgb()
-                }
-                if (originalColor.value == background.toArgb()) {
-                    originalColor.value =
-                        Color(palette.getMutedColor(background.toArgb())).toArgb()
-                }
-                if (originalColor.value == background.toArgb()) {
-                    originalColor.value =
-                        Color(palette.getDominantColor(background.toArgb())).toArgb()
-                }
-            }
-        }
-    }
-    val color by animateColorAsState(
-        targetValue = if ((music() == musicPlaying.value)) Color(originalColor.value) else Color(
-            MaterialTheme.colorScheme.background.toArgb()
-        )
-    )
-    val alpha by animateFloatAsState(if (music() == musicPlaying.value) 0.3F else 1F)*/
+@Composable
+private fun MusicListRow(
+    music: YosMediaItem,
+    modifier: Modifier = Modifier,
+    titleText: String,
+    subtitleText: String?,
+    showArtwork: Boolean,
+    artworkSize: Dp,
+    leadingWidth: Dp,
+    horizontalPadding: Dp,
+    leadingContent: (@Composable () -> Unit)?,
+    trailingContent: (@Composable (RowScope.() -> Unit))?,
+    itemClick: () -> Unit,
+) {
     Row(
         modifier = modifier
-            /*.animateItem(fadeInSpec = null, fadeOutSpec = null)*/
             .heightIn(min = 64.dp)
             .fillMaxWidth()
             .clickable {

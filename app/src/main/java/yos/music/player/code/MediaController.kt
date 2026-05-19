@@ -263,6 +263,64 @@ object MediaController {
         }
     }
 
+    suspend fun addToQueue(music: YosMediaItem): Boolean {
+        return addToQueue(listOf(music))
+    }
+
+    suspend fun addToQueue(musicList: List<YosMediaItem>): Boolean {
+        if (musicList.isEmpty()) {
+            return false
+        }
+
+        val controller = mediaControl ?: return false
+        val currentQueue = currentQueueSnapshot(controller)
+
+        if (currentQueue.isEmpty()) {
+            prepare(musicList.first(), musicList, play = false)
+            return true
+        }
+
+        val insertAt = if (controller.shuffleModeEnabled) {
+            val nextMediaItemIndex = controller.nextMediaItemIndex
+
+            if (nextMediaItemIndex != C.INDEX_UNSET) {
+                nextMediaItemIndex
+            } else {
+                (controller.currentMediaItemIndex + 1).coerceAtLeast(0)
+            }
+        } else {
+            currentQueue.size
+        }.coerceIn(0, currentQueue.size)
+
+        val updatedQueue = currentQueue.toMutableList().also {
+            it.addAll(insertAt, musicList)
+        }
+
+        withContext(Dispatchers.Main) {
+            controller.addMediaItems(insertAt, musicList.map { it.toMediaItem() })
+        }
+
+        playingMusicList.value = updatedQueue
+        MusicLibrary.updatePlayList(
+            PlayListV1(
+                mainMusicList,
+                updatedQueue,
+            )
+        )
+
+        return true
+    }
+
+    private fun currentQueueSnapshot(controller: androidx.media3.session.MediaController): List<YosMediaItem> {
+        playingMusicList.value?.let {
+            return it
+        }
+
+        return List(controller.mediaItemCount) { index ->
+            controller.getMediaItemAt(index).toYosMediaItem()
+        }
+    }
+
     fun onCase(mediaItem: YosMediaItem) {
         CoroutineScope(Dispatchers.IO).launch {
             refresh(mediaItem)

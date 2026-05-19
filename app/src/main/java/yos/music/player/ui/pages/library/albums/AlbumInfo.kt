@@ -419,6 +419,9 @@ fun AlbumInfo(
                             overflow = TextOverflow.Ellipsis,
                         )
                     },
+                    onQueueSwipe = {
+                        MediaController.addToQueue(music)
+                    },
                     itemClick = {
                         scope.launch(Dispatchers.IO) {
                             MediaController.prepare(music, displayedSongs.value)
