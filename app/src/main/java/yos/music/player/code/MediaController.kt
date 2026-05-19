@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
@@ -783,11 +784,23 @@ class YosPlaybackService : MediaSessionService() {
                             }
                         }
 
-                        val thisPath = path?.path
+                        val thisPath = AudioMetadataUtils.resolveLocalAudioFilePath(
+                            this@YosPlaybackService,
+                            path
+                        ) ?: path?.path
+                        Log.d(
+                            "FlamingoLyrics",
+                            "Track changed uri=$path resolvedPath=$thisPath mediaId=${player.currentMediaItem?.mediaId}"
+                        )
+
+                        if (thisPath != null) {
+                            lrcContent = AudioMetadataUtils.loadEmbeddedLyrics(thisPath)
+                        }
 
                         val finalLrcContent = if (lrcContent == null) {
                             val lrcPath = "${thisPath?.substringBeforeLast(".")}.lrc"
                             println("获取歌词元数据失败，将读取：$lrcPath")
+                            Log.d("FlamingoLyrics", "Attempting sidecar LRC path: $lrcPath")
                             AudioMetadataUtils.loadLrcFile(this@YosPlaybackService, lrcPath) ?: ""
                         } else {
                             lrcContent
@@ -795,6 +808,10 @@ class YosPlaybackService : MediaSessionService() {
 
                         val lrcFactory = YosLrcFactory()
                         lrcEntries.value = lrcFactory.formatLrcEntries(finalLrcContent)
+                        Log.d(
+                            "FlamingoLyrics",
+                            "Loaded lyric content length=${finalLrcContent.length} parsedEntries=${lrcEntries.value.size} otherSideCount=${MediaViewModelObject.otherSideForLines.size}"
+                        )
 
                         if (thisPath != null) {
                             // MediaViewModelObject.isDolby.value = thisPath.endsWith(".m4a")
@@ -815,6 +832,8 @@ class YosPlaybackService : MediaSessionService() {
                         MediaViewModelObject.bitrate.intValue = bitrate
 
                         println("质量分析 采样率：${MediaViewModelObject.samplingRate.intValue}，比特率：${MediaViewModelObject.bitrate.intValue}")
+                    }.onFailure { throwable ->
+                        Log.e("FlamingoLyrics", "onTracksChanged lyric processing failed", throwable)
                     }
                 }
 

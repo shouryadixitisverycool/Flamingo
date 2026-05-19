@@ -105,12 +105,12 @@ class YosLrcFactory(private val formatText: Boolean = true) {
                 if (lyric.isEmpty()) {
                     // 句子起始
                     lyric = ""
-                    currentLinePairs.add(time to lyric.replace(Regex("(?!\\n)\\s+"), " "))
+                    currentLinePairs.add(time to lyric.replace(Regex("(?!\\n)\\s+"), " ").trimStart())
                 } else {
                     // 正常句子成分
                     if (/*lyric.isNotBlank() && */lyric.trim() != "//") {
                         currentLinePairs.add(
-                            time to lyric.replace(Regex("(?!\\n)\\s+"), " ")
+                            time to lyric.replace(Regex("(?!\\n)\\s+"), " ").trimStart()
                         )
                     }
                 }
@@ -122,7 +122,7 @@ class YosLrcFactory(private val formatText: Boolean = true) {
                             time to remainingLine.replace("//", "").replace(
                                 Regex("(?!\\n)\\s+"),
                                 " "
-                            )/*.trim()*/
+                            ).trimStart()/*.trim()*/
                         )
                     }
                     remainingLine = ""
@@ -166,7 +166,10 @@ class YosLrcFactory(private val formatText: Boolean = true) {
                 if (currentSinger.matches(Regex(".+\\s*:\\s*"))) {
                     println("符合要求：$lyric")
                     deleteType = 0
-                    if (lastSinger != null && lastSinger == currentSinger) {
+                    val fixedOtherSide = currentSinger.toFixedOtherSide()
+                    if (fixedOtherSide != null) {
+                        otherSide = fixedOtherSide
+                    } else if (lastSinger != null && lastSinger == currentSinger) {
                         // 保持 otherSide 不变
                     } else {
                         if (otherSideFirstTime) {
@@ -199,6 +202,15 @@ class YosLrcFactory(private val formatText: Boolean = true) {
 
         //println(filteredLrcEntries)
         return filteredLrcEntries
+    }
+
+    private fun String.toFixedOtherSide(): Boolean? {
+        val singerTag = this.substringBefore(":").substringBefore("：").trim().lowercase()
+        return when (singerTag) {
+            "v1" -> false
+            "v2" -> true
+            else -> null
+        }
     }
 }
 
