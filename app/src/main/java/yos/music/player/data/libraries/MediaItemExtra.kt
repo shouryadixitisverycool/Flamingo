@@ -8,6 +8,7 @@ const val defaultArtistsName = "Unknown Artist"
 val defaultArtists = listOf(defaultArtistsName)
 const val defaultTitle = "Unknown Work"
 const val defaultAlbum = "Unknown Album"
+private val artistSplitExceptions = listOf("Tyler, The Creator")
 
 val MediaItem.uri: Uri?
     get() = this.localConfiguration?.uri
@@ -105,11 +106,23 @@ fun String.toMultipleArtists(): List<String> {
             .forEach { add(it) }
     }.distinct()
 
-    val splitArtists = delimiters.fold(listOf(this)) { currentArtists, delimiter ->
+    var protectedArtistsText = this
+    val protectedArtistMap = mutableMapOf<String, String>()
+
+    artistSplitExceptions.forEachIndexed { index, artistException ->
+        if (delimiters.any { artistException.contains(it) } && protectedArtistsText.contains(artistException)) {
+            val placeholder = "__ARTIST_EXCEPTION_${index}__"
+            protectedArtistsText = protectedArtistsText.replace(artistException, placeholder)
+            protectedArtistMap[placeholder] = artistException
+        }
+    }
+
+    val splitArtists = delimiters.fold(listOf(protectedArtistsText)) { currentArtists, delimiter ->
         currentArtists.flatMap { artist ->
             artist.split(delimiter).map { it.trim() }
         }
-    }.filter { it.isNotEmpty() }
+    }.map { protectedArtistMap[it] ?: it }
+        .filter { it.isNotEmpty() }
 
     return splitArtists.ifEmpty { listOf(this.trim()) }
 }
