@@ -65,11 +65,8 @@ import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
-import yos.music.player.ui.pages.library.MusicDetailActionPill
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
-import yos.music.player.ui.pages.library.MusicDetailPillButton
-import yos.music.player.ui.pages.library.MusicDetailPillDivider
 import yos.music.player.ui.pages.library.MusicList
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
@@ -254,44 +251,9 @@ fun ArtistInfo(navController: NavController)
         actionContent = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
             ) {
-                MusicDetailActionPill(
-                    modifier = Modifier.width(122.dp),
-                ) {
-                    MusicDetailPillButton(
-                        painter = painterResource(
-                            id = if (isFollowed) {
-                                R.drawable.ic_nowplaying_favorited
-                            } else {
-                                R.drawable.ic_nowplaying_favorite
-                            },
-                        ),
-                        contentDescription = stringResource(
-                            id = if (isFollowed) {
-                                R.string.artist_action_unfollow
-                            } else {
-                                R.string.artist_action_follow
-                            },
-                        ),
-                        selected = isFollowed,
-                        onClick = {
-                            SettingsLibrary.toggleArtistFollowed(artistName.value)
-                        },
-                    )
-                    MusicDetailPillDivider()
-                    MusicDetailPillButton(
-                        painter = painterResource(id = R.drawable.ic_nowplaying_more),
-                        contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
-                        onClick = {
-                            overflowSheetOpen.value = true
-                        },
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(14.dp))
-
                 MusicDetailCircleButton(
                     painter = painterResource(id = R.drawable.button_icon_play),
                     contentDescription = stringResource(id = R.string.normal_button_play),
@@ -302,6 +264,37 @@ fun ArtistInfo(navController: NavController)
                         scope.launch(Dispatchers.IO) {
                             MediaController.prepare(artistSongs.first(), artistSongs)
                         }
+                    },
+                )
+
+                MusicDetailCircleButton(
+                    painter = painterResource(
+                        id = if (isFollowed) {
+                            R.drawable.ic_nowplaying_favorited
+                        } else {
+                            R.drawable.ic_nowplaying_favorite
+                        },
+                    ),
+                    contentDescription = stringResource(
+                        id = if (isFollowed) {
+                            R.string.artist_action_unfollow
+                        } else {
+                            R.string.artist_action_follow
+                        },
+                    ),
+                    selected = isFollowed,
+                    iconSize = 26.dp,
+                    onClick = {
+                        SettingsLibrary.toggleArtistFollowed(artistName.value)
+                    },
+                )
+
+                MusicDetailCircleButton(
+                    painter = painterResource(id = R.drawable.ic_nowplaying_more),
+                    contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                    iconSize = 26.dp,
+                    onClick = {
+                        overflowSheetOpen.value = true
                     },
                 )
             }
@@ -509,19 +502,18 @@ private fun ArtistReleaseCard(release: ArtistRelease, onClick: () -> Unit)
                 .alpha(0.94f),
         )
 
-        Text(
-            text = release.releaseYear?.toString() ?: stringResource(
-                id = R.string.page_library_album_desc,
-                release.songs.size,
-            ),
-            fontSize = 13.sp,
-            lineHeight = 16.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .padding(top = 3.dp)
-                .alpha(0.56f),
-        )
+        release.releaseYear?.let {
+            Text(
+                text = it.toString(),
+                fontSize = 13.sp,
+                lineHeight = 16.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(top = 3.dp)
+                    .alpha(0.56f),
+            )
+        }
     }
 }
 
