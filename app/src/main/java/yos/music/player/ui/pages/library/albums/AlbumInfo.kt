@@ -7,6 +7,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,12 +65,15 @@ import yos.music.player.data.libraries.artistsName
 import yos.music.player.data.libraries.defaultArtists
 import yos.music.player.data.libraries.defaultArtistsName
 import yos.music.player.data.libraries.defaultTitle
+import yos.music.player.data.libraries.toMultipleArtists
 import yos.music.player.data.objects.LibraryObject
+import yos.music.player.ui.UI
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
 import yos.music.player.ui.pages.library.MusicList
 import yos.music.player.ui.pages.library.playlists.PlayListSearch
 import yos.music.player.ui.theme.withNight
+import yos.music.player.ui.toUI
 import yos.music.player.ui.widgets.basic.ActionItem
 import yos.music.player.ui.widgets.basic.ActionSheetBody
 import yos.music.player.ui.widgets.basic.ActionSheet
@@ -161,6 +165,13 @@ fun AlbumInfo(
         albumSongs.firstOrNull()?.albumArtists
             ?: albumSongs.firstOrNull()?.artistsName
             ?: defaultArtistsName
+    }
+    val artistPageTargetName = remember(albumSongs) {
+        albumSongs.firstOrNull()?.albumArtists
+            ?.toMultipleArtists()
+            ?.firstOrNull()
+            ?: albumSongs.firstOrNull()?.artistsList
+                ?.firstOrNull()
     }
     val songCount = remember(albumSongs) {
         albumSongs.size
@@ -288,6 +299,12 @@ fun AlbumInfo(
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable(enabled = artistPageTargetName != null) {
+                    val targetArtistName = artistPageTargetName ?: return@clickable
+                    LibraryObject.setTargetArtistName(targetArtistName)
+                    LibraryObject.setArtistSongsSearchOnOpen(false)
+                    navController.toUI(UI.ArtistInfo)
+                },
             )
 
             Spacer(modifier = Modifier.height(8.dp))

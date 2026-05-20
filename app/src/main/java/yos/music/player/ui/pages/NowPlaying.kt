@@ -150,16 +150,20 @@ import yos.music.player.code.utils.player.FadeExo.fadePlay
 import yos.music.player.data.libraries.FavPlayListLibrary
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.YosMediaItem
+import yos.music.player.data.libraries.artistsList
 import yos.music.player.data.libraries.artistsName
 import yos.music.player.data.libraries.defaultArtistsName
 import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.models.MainViewModel
 import yos.music.player.data.models.MediaViewModel
 import yos.music.player.data.objects.MediaViewModelObject
+import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.pages.NowPlayingPage.Album
 import yos.music.player.ui.pages.NowPlayingPage.Lyric
 import yos.music.player.ui.pages.NowPlayingPage.PlayingList
 import yos.music.player.ui.theme.YosRoundedCornerShape
+import yos.music.player.ui.UI
+import yos.music.player.ui.toUI
 import yos.music.player.ui.widgets.YosLyricView
 import yos.music.player.ui.widgets.effects.YosFloatingLight
 import yos.music.player.ui.widgets.audio.MusicQualityIndicator
@@ -456,7 +460,7 @@ fun NowPlaying(
                                                     }
 
                                                     YosWrapper {
-                                                        ActionButtonsRow {
+                                                        ActionButtonsRow(navController) {
                                                             it
                                                         }
                                                     }
@@ -477,6 +481,7 @@ fun NowPlaying(
                                                 ),
                                                 visible = isVisible
                                             ),
+                                            navController = navController,
                                             albumUrlLambda = {
                                                 thisMusicPlaying.value?.thumb
                                             },
@@ -501,6 +506,7 @@ fun NowPlaying(
                                                 ),
                                                 visible = isVisible
                                             ),
+                                            navController = navController,
                                             albumUrlLambda = {
                                                 thisMusicPlaying.value?.thumb
                                             },
@@ -1189,7 +1195,7 @@ private fun Lyric(
 }
 
 @Composable
-private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
+private fun ActionButtonsRow(navController: NavController, musicPlayingLambda: () -> YosMediaItem?) {
     Row(
         modifier = Modifier
             .overlayEffect(),
@@ -1209,6 +1215,7 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
         NowPlayingOverflowSheet(
             isOpen = overflowSheetOpen,
             song = snapshotSong.value,
+            navController = navController,
         )
 
         Box(
@@ -1336,6 +1343,7 @@ private fun ActionButtonsRow(musicPlayingLambda: () -> YosMediaItem?) {
 private fun NowPlayingOverflowSheet(
     isOpen: MutableState<Boolean>,
     song: YosMediaItem?,
+    navController: NavController,
 ) {
     if (!isOpen.value) return
 
@@ -1363,6 +1371,8 @@ private fun NowPlayingOverflowSheet(
         when (screen) {
             OverflowScreen.Menu -> OverflowMenuBody(
                 song = song,
+                navController = navController,
+                onDismiss = onDismiss,
                 onPickPlaylist = { screen = OverflowScreen.Playlist },
                 onPickSleepTimer = { screen = OverflowScreen.SleepTimer },
             )
@@ -1386,6 +1396,8 @@ private enum class OverflowScreen { Menu, Playlist, SleepTimer }
 @Composable
 private fun OverflowMenuBody(
     song: YosMediaItem?,
+    navController: NavController,
+    onDismiss: () -> Unit,
     onPickPlaylist: () -> Unit,
     onPickSleepTimer: () -> Unit,
 ) {
@@ -1418,7 +1430,13 @@ private fun OverflowMenuBody(
 
     ActionSheetBody(
         header = if (song != null) {
-            { NowPlayingOverflowHeader(song = song) }
+            {
+                NowPlayingOverflowHeader(
+                    song = song,
+                    navController = navController,
+                    onDismiss = onDismiss,
+                )
+            }
         } else null,
         items = items,
     )
@@ -1432,9 +1450,19 @@ private fun OverflowMenuBody(
  * changes while the sheet is open (PRD §5.3 FR-OM-8).
  */
 @Composable
-private fun NowPlayingOverflowHeader(song: YosMediaItem) {
+private fun NowPlayingOverflowHeader(
+    song: YosMediaItem,
+    navController: NavController,
+    onDismiss: () -> Unit,
+) {
     val context = LocalContext.current
     val shape = YosRoundedCornerShape(8.dp)
+    val targetArtistName = remember(song) {
+        song.artistsList?.firstOrNull()?.takeIf { it.isNotBlank() }
+    }
+    val targetAlbumName = remember(song) {
+        song.album?.takeIf { it.isNotBlank() }
+    }
 
     Row(
         modifier = Modifier
@@ -1470,7 +1498,18 @@ private fun NowPlayingOverflowHeader(song: YosMediaItem) {
                     fontSize = 13.5.sp,
                     modifier = Modifier
                         .padding(top = 3.dp)
-                        .alpha(0.7f),
+                        .alpha(0.7f)
+                        .clickable(
+                            enabled = targetArtistName != null,
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                        ) {
+                            val artistName = targetArtistName ?: return@clickable
+                            LibraryObject.setTargetArtistName(artistName)
+                            LibraryObject.setArtistSongsSearchOnOpen(false)
+                            onDismiss()
+                            navController.toUI(UI.ArtistInfo)
+                        },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1481,7 +1520,17 @@ private fun NowPlayingOverflowHeader(song: YosMediaItem) {
                     fontSize = 12.5.sp,
                     modifier = Modifier
                         .padding(top = 2.dp)
-                        .alpha(0.5f),
+                        .alpha(0.5f)
+                        .clickable(
+                            enabled = targetAlbumName != null,
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                        ) {
+                            val albumName = targetAlbumName ?: return@clickable
+                            LibraryObject.setTargetAlbumName(albumName)
+                            onDismiss()
+                            navController.toUI(UI.AlbumInfo)
+                        },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1493,6 +1542,7 @@ private fun NowPlayingOverflowHeader(song: YosMediaItem) {
 @Composable
 private fun PlayingBar(
     modifier: Modifier,
+    navController: NavController,
     albumUrlLambda: () -> Uri?,
     musicPlayingLambda: () -> YosMediaItem?,
     onAlbumClick: () -> Unit
@@ -1544,7 +1594,7 @@ private fun PlayingBar(
         }
 
         YosWrapper {
-            ActionButtonsRow(musicPlayingLambda)
+            ActionButtonsRow(navController, musicPlayingLambda)
         }
     }
 
