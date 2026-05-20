@@ -61,6 +61,7 @@ import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.ripple
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -109,7 +110,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -218,6 +221,7 @@ fun NowPlaying(
     mainViewModel: MainViewModel,
     mediaViewModel: MediaViewModel,
     navController: NavController,
+    onMinimizeNowPlaying: () -> Unit,
     isPlayingStatusLambda: () -> Boolean,
     isPlayingOnChanged: (Boolean) -> Unit,
     nowPageLambda: () -> String,
@@ -460,7 +464,7 @@ fun NowPlaying(
                                                     }
 
                                                     YosWrapper {
-                                                        ActionButtonsRow(navController) {
+                                                        ActionButtonsRow(navController, onMinimizeNowPlaying) {
                                                             it
                                                         }
                                                     }
@@ -482,6 +486,7 @@ fun NowPlaying(
                                                 visible = isVisible
                                             ),
                                             navController = navController,
+                                            onMinimizeNowPlaying = onMinimizeNowPlaying,
                                             albumUrlLambda = {
                                                 thisMusicPlaying.value?.thumb
                                             },
@@ -507,6 +512,7 @@ fun NowPlaying(
                                                 visible = isVisible
                                             ),
                                             navController = navController,
+                                            onMinimizeNowPlaying = onMinimizeNowPlaying,
                                             albumUrlLambda = {
                                                 thisMusicPlaying.value?.thumb
                                             },
@@ -1195,7 +1201,11 @@ private fun Lyric(
 }
 
 @Composable
-private fun ActionButtonsRow(navController: NavController, musicPlayingLambda: () -> YosMediaItem?) {
+private fun ActionButtonsRow(
+    navController: NavController,
+    onMinimizeNowPlaying: () -> Unit,
+    musicPlayingLambda: () -> YosMediaItem?,
+) {
     Row(
         modifier = Modifier
             .overlayEffect(),
@@ -1216,6 +1226,7 @@ private fun ActionButtonsRow(navController: NavController, musicPlayingLambda: (
             isOpen = overflowSheetOpen,
             song = snapshotSong.value,
             navController = navController,
+            onMinimizeNowPlaying = onMinimizeNowPlaying,
         )
 
         Box(
@@ -1344,6 +1355,7 @@ private fun NowPlayingOverflowSheet(
     isOpen: MutableState<Boolean>,
     song: YosMediaItem?,
     navController: NavController,
+    onMinimizeNowPlaying: () -> Unit,
 ) {
     if (!isOpen.value) return
 
@@ -1372,6 +1384,7 @@ private fun NowPlayingOverflowSheet(
             OverflowScreen.Menu -> OverflowMenuBody(
                 song = song,
                 navController = navController,
+                onMinimizeNowPlaying = onMinimizeNowPlaying,
                 onDismiss = onDismiss,
                 onPickPlaylist = { screen = OverflowScreen.Playlist },
                 onPickSleepTimer = { screen = OverflowScreen.SleepTimer },
@@ -1397,6 +1410,7 @@ private enum class OverflowScreen { Menu, Playlist, SleepTimer }
 private fun OverflowMenuBody(
     song: YosMediaItem?,
     navController: NavController,
+    onMinimizeNowPlaying: () -> Unit,
     onDismiss: () -> Unit,
     onPickPlaylist: () -> Unit,
     onPickSleepTimer: () -> Unit,
@@ -1434,6 +1448,7 @@ private fun OverflowMenuBody(
                 NowPlayingOverflowHeader(
                     song = song,
                     navController = navController,
+                    onMinimizeNowPlaying = onMinimizeNowPlaying,
                     onDismiss = onDismiss,
                 )
             }
@@ -1453,12 +1468,13 @@ private fun OverflowMenuBody(
 private fun NowPlayingOverflowHeader(
     song: YosMediaItem,
     navController: NavController,
+    onMinimizeNowPlaying: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val shape = YosRoundedCornerShape(8.dp)
-    val targetArtistName = remember(song) {
-        song.artistsList?.firstOrNull()?.takeIf { it.isNotBlank() }
+    val targetArtistNames = remember(song) {
+        song.artistsList.orEmpty().filter { it.isNotBlank() }
     }
     val targetAlbumName = remember(song) {
         song.album?.takeIf { it.isNotBlank() }
@@ -1492,24 +1508,51 @@ private fun NowPlayingOverflowHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (!song.artists.isNullOrBlank()) {
+            if (targetArtistNames.isNotEmpty()) {
+                val artistAnnotatedText = remember(targetArtistNames) {
+                    buildAnnotatedString {
+                        targetArtistNames.forEachIndexed { index, artistName ->
+                            pushStringAnnotation(tag = "artist", annotation = artistName)
+                            append(artistName)
+                            pop()
+                            if (index < targetArtistNames.lastIndex) {
+                                append("、")
+                            }
+                        }
+                    }
+                }
+
+                ClickableText(
+                    text = artistAnnotatedText,
+                    style = androidx.compose.ui.text.TextStyle(
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Normal,
+                    ),
+                    modifier = Modifier.padding(top = 3.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    onClick = { offset ->
+                        val artistName = artistAnnotatedText
+                            .getStringAnnotations(tag = "artist", start = offset, end = offset)
+                            .firstOrNull()
+                            ?.item
+                            ?: return@ClickableText
+
+                        LibraryObject.setTargetArtistName(artistName)
+                        LibraryObject.setArtistSongsSearchOnOpen(false)
+                        onDismiss()
+                        onMinimizeNowPlaying()
+                        navController.toUI(UI.ArtistInfo)
+                    },
+                )
+            } else if (!song.artists.isNullOrBlank()) {
                 Text(
                     text = song.artists,
                     fontSize = 13.5.sp,
                     modifier = Modifier
                         .padding(top = 3.dp)
-                        .alpha(0.7f)
-                        .clickable(
-                            enabled = targetArtistName != null,
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                        ) {
-                            val artistName = targetArtistName ?: return@clickable
-                            LibraryObject.setTargetArtistName(artistName)
-                            LibraryObject.setArtistSongsSearchOnOpen(false)
-                            onDismiss()
-                            navController.toUI(UI.ArtistInfo)
-                        },
+                        .alpha(0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1529,6 +1572,7 @@ private fun NowPlayingOverflowHeader(
                             val albumName = targetAlbumName ?: return@clickable
                             LibraryObject.setTargetAlbumName(albumName)
                             onDismiss()
+                            onMinimizeNowPlaying()
                             navController.toUI(UI.AlbumInfo)
                         },
                     maxLines = 1,
@@ -1543,6 +1587,7 @@ private fun NowPlayingOverflowHeader(
 private fun PlayingBar(
     modifier: Modifier,
     navController: NavController,
+    onMinimizeNowPlaying: () -> Unit,
     albumUrlLambda: () -> Uri?,
     musicPlayingLambda: () -> YosMediaItem?,
     onAlbumClick: () -> Unit
@@ -1594,7 +1639,7 @@ private fun PlayingBar(
         }
 
         YosWrapper {
-            ActionButtonsRow(navController, musicPlayingLambda)
+            ActionButtonsRow(navController, onMinimizeNowPlaying, musicPlayingLambda)
         }
     }
 

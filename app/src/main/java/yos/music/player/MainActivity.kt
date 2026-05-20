@@ -871,6 +871,12 @@ class MainActivity : BaseActivity() {
                                                 mainViewModel = mainViewModel,
                                                 mediaViewModel = mediaViewModel,
                                                 navController = navController,
+                                                onMinimizeNowPlaying = {
+                                                    nowPageNowPlaying.value = Album
+                                                    scope.launch {
+                                                        offsetY.animateTo(0f, animationSpec = navSpec)
+                                                    }
+                                                },
                                                 isPlayingStatusLambda = { isPlaying.value },
                                                 isPlayingOnChanged = {
                                                     isPlaying.value = it
