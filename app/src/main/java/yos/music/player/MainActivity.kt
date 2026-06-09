@@ -269,16 +269,6 @@ class MainActivity : BaseActivity() {
                             }
 
                         val hazeState = remember { HazeState() }
-                        val reopenNowPlaying: () -> Unit = {
-                            nowPageNowPlaying.value = Album
-                            scope.launch {
-                                offsetY.animateTo(
-                                    parentHeight.intValue.toFloat(),
-                                    animationSpec = navSpec,
-                                )
-                            }
-                        }
-
                         YosWrapper {
                             val isNight = isFlamingoInDarkMode()
                             if (showNowPlaying.value) {
@@ -466,13 +456,7 @@ class MainActivity : BaseActivity() {
                                                 LocalArtists(navController)
                                             }
                                             composable(UI.ArtistInfo) {
-                                                ArtistInfo(
-                                                    navController = navController,
-                                                    onBackToNowPlaying = {
-                                                        navController.popBackStack()
-                                                        reopenNowPlaying()
-                                                    },
-                                                )
+                                                ArtistInfo(navController = navController)
                                             }
                                             composable(UI.ArtistSongs) {
                                                 ArtistSongs(navController)
@@ -483,10 +467,6 @@ class MainActivity : BaseActivity() {
                                                     navController = navController,
                                                     sharedTransitionScope = this@SharedTransitionLayout,
                                                     animatedContentScope = this@composable,
-                                                    onBackToNowPlaying = {
-                                                        navController.popBackStack()
-                                                        reopenNowPlaying()
-                                                    },
                                                 )
                                             }
 

@@ -67,6 +67,7 @@ import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
 import yos.music.player.ui.consumeNowPlayingNavigationMarker
+import yos.music.player.ui.returnToLibraryFromNowPlaying
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
 import yos.music.player.ui.pages.library.MusicList
@@ -85,7 +86,6 @@ import yos.music.player.ui.widgets.playlist.PlayListPickerContent
 @Composable
 fun ArtistInfo(
     navController: NavController,
-    onBackToNowPlaying: () -> Unit = { navController.popBackStack() },
 )
 {
     val openedFromNowPlaying = rememberSaveable(key = "ArtistInfo_openedFromNowPlaying") {
@@ -94,7 +94,7 @@ fun ArtistInfo(
     val handleBack: () -> Unit = {
         if (openedFromNowPlaying.value) {
             openedFromNowPlaying.value = false
-            onBackToNowPlaying()
+            navController.returnToLibraryFromNowPlaying()
         } else {
             navController.popBackStack()
         }

@@ -157,7 +157,13 @@ internal fun <T> SheetAnimatedContent(
                     )
             }
         },
-        content = content,
+        content = { state ->
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                content(state)
+            }
+        },
     )
 }
 

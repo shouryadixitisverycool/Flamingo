@@ -70,6 +70,7 @@ import yos.music.player.data.libraries.toMultipleArtists
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
 import yos.music.player.ui.consumeNowPlayingNavigationMarker
+import yos.music.player.ui.returnToLibraryFromNowPlaying
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
 import yos.music.player.ui.pages.library.MusicList
@@ -94,7 +95,6 @@ fun AlbumInfo(
     navController: NavController,
     sharedTransitionScope: SharedTransitionScope,
     animatedContentScope: AnimatedContentScope,
-    onBackToNowPlaying: () -> Unit = { navController.popBackStack() },
 ) {
     val openedFromNowPlaying = rememberSaveable(key = "AlbumInfo_openedFromNowPlaying") {
         mutableStateOf(navController.consumeNowPlayingNavigationMarker())
@@ -102,7 +102,7 @@ fun AlbumInfo(
     val handleBack: () -> Unit = {
         if (openedFromNowPlaying.value) {
             openedFromNowPlaying.value = false
-            onBackToNowPlaying()
+            navController.returnToLibraryFromNowPlaying()
         } else {
             navController.popBackStack()
         }

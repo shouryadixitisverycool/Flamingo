@@ -2,6 +2,7 @@ package yos.music.player.ui
 
 import androidx.compose.runtime.Stable
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 
 /*object UI {
     const val HomePage = "HomePage"
@@ -75,4 +76,16 @@ fun NavController.markNextNavigationFromNowPlaying()
 fun NavController.consumeNowPlayingNavigationMarker(): Boolean
 {
     return previousBackStackEntry?.savedStateHandle?.remove<Boolean>(ReturnToNowPlayingOnBackKey) == true
+}
+
+fun NavController.returnToLibraryFromNowPlaying()
+{
+    if (popBackStack(UI.Library, false)) {
+        return
+    }
+
+    navigate(UI.Library) {
+        popUpTo(graph.findStartDestination().id)
+        launchSingleTop = true
+    }
 }

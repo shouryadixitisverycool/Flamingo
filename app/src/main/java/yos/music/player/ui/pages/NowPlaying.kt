@@ -1225,12 +1225,18 @@ private fun ActionButtonsRow(
         // Snapshot of the song that was playing when the sheet was opened
         // (PRD §5.3 FR-OM-8). All actions in the sheet refer to this item.
         val snapshotSong = remember { mutableStateOf<YosMediaItem?>(null) }
+        val actionButtonScope = rememberCoroutineScope()
 
         NowPlayingOverflowSheet(
             isOpen = overflowSheetOpen,
             song = snapshotSong.value,
             navController = navController,
-            onMinimizeNowPlaying = onMinimizeNowPlaying,
+            onOpenLibraryTarget = {
+                actionButtonScope.launch {
+                    onMinimizeNowPlaying()
+                }
+                navController.toUI(it.route)
+            },
         )
 
         Box(
@@ -1359,7 +1365,7 @@ private fun NowPlayingOverflowSheet(
     isOpen: MutableState<Boolean>,
     song: YosMediaItem?,
     navController: NavController,
-    onMinimizeNowPlaying: suspend () -> Unit,
+    onOpenLibraryTarget: (OverflowLibraryTarget) -> Unit,
 ) {
     if (!isOpen.value) return
 
@@ -1395,7 +1401,7 @@ private fun NowPlayingOverflowSheet(
                 OverflowScreen.Menu -> OverflowMenuBody(
                     song = song,
                     navController = navController,
-                    onMinimizeNowPlaying = onMinimizeNowPlaying,
+                    onOpenLibraryTarget = onOpenLibraryTarget,
                     onDismiss = onDismiss,
                     onPickPlaylist = {
                         navigationDirection.intValue = SheetNavigationForward
@@ -1430,11 +1436,17 @@ private fun NowPlayingOverflowSheet(
 
 private enum class OverflowScreen { Menu, Playlist, SleepTimer }
 
+private enum class OverflowLibraryTarget(val route: String)
+{
+    Artist(UI.ArtistInfo),
+    Album(UI.AlbumInfo),
+}
+
 @Composable
 private fun OverflowMenuBody(
     song: YosMediaItem?,
     navController: NavController,
-    onMinimizeNowPlaying: suspend () -> Unit,
+    onOpenLibraryTarget: (OverflowLibraryTarget) -> Unit,
     onDismiss: () -> Unit,
     onPickPlaylist: () -> Unit,
     onPickSleepTimer: () -> Unit,
@@ -1472,7 +1484,7 @@ private fun OverflowMenuBody(
                 NowPlayingOverflowHeader(
                     song = song,
                     navController = navController,
-                    onMinimizeNowPlaying = onMinimizeNowPlaying,
+                    onOpenLibraryTarget = onOpenLibraryTarget,
                     onDismiss = onDismiss,
                 )
             }
@@ -1492,11 +1504,10 @@ private fun OverflowMenuBody(
 private fun NowPlayingOverflowHeader(
     song: YosMediaItem,
     navController: NavController,
-    onMinimizeNowPlaying: suspend () -> Unit,
+    onOpenLibraryTarget: (OverflowLibraryTarget) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val shape = YosRoundedCornerShape(8.dp)
     val targetArtistNames = remember(song) {
         song.artistsList.orEmpty().filter { it.isNotBlank() }
@@ -1568,10 +1579,7 @@ private fun NowPlayingOverflowHeader(
                         LibraryObject.setArtistSongsSearchOnOpen(false)
                         navController.markNextNavigationFromNowPlaying()
                         onDismiss()
-                        coroutineScope.launch {
-                            onMinimizeNowPlaying()
-                            navController.toUI(UI.ArtistInfo)
-                        }
+                        onOpenLibraryTarget(OverflowLibraryTarget.Artist)
                     },
                 )
             } else if (!song.artists.isNullOrBlank()) {
@@ -1601,10 +1609,7 @@ private fun NowPlayingOverflowHeader(
                             LibraryObject.setTargetAlbumName(albumName)
                             navController.markNextNavigationFromNowPlaying()
                             onDismiss()
-                            coroutineScope.launch {
-                                onMinimizeNowPlaying()
-                                navController.toUI(UI.AlbumInfo)
-                            }
+                            onOpenLibraryTarget(OverflowLibraryTarget.Album)
                         },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
