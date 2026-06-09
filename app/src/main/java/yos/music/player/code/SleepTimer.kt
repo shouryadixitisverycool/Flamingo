@@ -73,6 +73,25 @@ object SleepTimer {
         }
     }
 
+    fun addDuration(durationMs: Long) {
+        val activeTimerState = state.value as? SleepTimerState.Active
+
+        if (activeTimerState?.option is SleepTimerOption.Duration) {
+            val remainingDurationMs =
+                (activeTimerState.expiresAtElapsedMs ?: SystemClock.elapsedRealtime()) -
+                    SystemClock.elapsedRealtime()
+
+            start(
+                SleepTimerOption.Duration(
+                    remainingDurationMs.coerceAtLeast(0L) + durationMs,
+                ),
+            )
+            return
+        }
+
+        start(SleepTimerOption.Duration(durationMs))
+    }
+
     /** Cancel the active timer (if any). Safe to call when inactive. */
     fun cancel() {
         tickerJob?.cancel()

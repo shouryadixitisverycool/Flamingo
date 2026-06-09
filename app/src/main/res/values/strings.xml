@@ -156,6 +156,7 @@
     <string name="sleep_timer_end_of_track">End of Track</string>
     <string name="sleep_timer_end_of_queue">End of Album/Playlist</string>
     <string name="sleep_timer_minutes">%d minutes</string>
+    <string name="sleep_timer_add_minutes">Add %d minutes</string>
     <string name="sleep_timer_custom">Custom…</string>
     <string name="sleep_timer_active_format">%1$s · %2$s remaining</string>
     <string name="sleep_timer_active_short">Timer running</string>

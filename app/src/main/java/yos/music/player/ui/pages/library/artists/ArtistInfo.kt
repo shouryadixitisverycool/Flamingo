@@ -1,6 +1,7 @@
 package yos.music.player.ui.pages.library.artists
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -65,6 +66,7 @@ import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
+import yos.music.player.ui.consumeNowPlayingNavigationMarker
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
 import yos.music.player.ui.pages.library.MusicList
@@ -81,8 +83,25 @@ import yos.music.player.ui.widgets.playlist.PlayListPickerContent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ArtistInfo(navController: NavController)
+fun ArtistInfo(
+    navController: NavController,
+    onBackToNowPlaying: () -> Unit = { navController.popBackStack() },
+)
 {
+    val openedFromNowPlaying = rememberSaveable(key = "ArtistInfo_openedFromNowPlaying") {
+        mutableStateOf(navController.consumeNowPlayingNavigationMarker())
+    }
+    val handleBack: () -> Unit = {
+        if (openedFromNowPlaying.value) {
+            openedFromNowPlaying.value = false
+            onBackToNowPlaying()
+        } else {
+            navController.popBackStack()
+        }
+    }
+
+    BackHandler(onBack = handleBack)
+
     val artistName = rememberSaveable(key = "ArtistInfo_artistName") {
         mutableStateOf(LibraryObject.getTargetArtistName())
     }
@@ -103,9 +122,7 @@ fun ArtistInfo(navController: NavController)
     if (showEmptyState.value) {
         Title(
             title = stringResource(id = R.string.page_library_artists),
-            onBack = {
-                navController.popBackStack()
-            },
+            onBack = handleBack,
         ) {
             item("ArtistInfo_empty") {
                 Column(
@@ -222,9 +239,7 @@ fun ArtistInfo(navController: NavController)
         showSearchButton = true,
         searchModeActive = false,
         searchRequestFocusSignal = 0,
-        onBack = {
-            navController.popBackStack()
-        },
+        onBack = handleBack,
         onSort = {},
         onSearchTextChange = {},
         onSearchClick = {

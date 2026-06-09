@@ -1,5 +1,20 @@
 package yos.music.player.ui.widgets.basic
 
+import android.animation.ValueAnimator
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,6 +70,96 @@ import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
+
+internal const val SheetNavigationForward = 1
+internal const val SheetNavigationBackward = -1
+
+@Composable
+internal fun rememberSheetMotionEnabled(): Boolean
+{
+    val context = LocalContext.current
+
+    return remember(context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ValueAnimator.areAnimatorsEnabled()
+        } else {
+            Settings.Global.getFloat(
+                context.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f,
+            ) != 0f
+        }
+    }
+}
+
+@Composable
+internal fun <T> SheetAnimatedContent(
+    targetState: T,
+    navigationDirection: Int,
+    modifier: Modifier = Modifier,
+    label: String,
+    content: @Composable AnimatedContentScope.(T) -> Unit,
+)
+{
+    val motionEnabled = rememberSheetMotionEnabled()
+
+    AnimatedContent(
+        targetState = targetState,
+        modifier = modifier,
+        label = label,
+        transitionSpec = {
+            if (!motionEnabled) {
+                EnterTransition.None togetherWith ExitTransition.None using
+                    SizeTransform(clip = false)
+            } else {
+                val durationMillis = 280
+                val enterOffset: (Int) -> Int = {
+                    val distance = (it * 0.18f).toInt().coerceAtLeast(56)
+                    if (navigationDirection == SheetNavigationBackward) -distance else distance
+                }
+                val exitOffset: (Int) -> Int = {
+                    val distance = (it * 0.18f).toInt().coerceAtLeast(56)
+                    if (navigationDirection == SheetNavigationBackward) distance else -distance
+                }
+
+                (slideInHorizontally(
+                    animationSpec = tween(
+                        durationMillis = durationMillis,
+                        easing = FastOutSlowInEasing,
+                    ),
+                    initialOffsetX = enterOffset,
+                ) + fadeIn(
+                    animationSpec = tween(
+                        durationMillis = durationMillis - 80,
+                        easing = FastOutSlowInEasing,
+                    ),
+                )) togetherWith
+                    (slideOutHorizontally(
+                        animationSpec = tween(
+                            durationMillis = durationMillis,
+                            easing = FastOutSlowInEasing,
+                        ),
+                        targetOffsetX = exitOffset,
+                    ) + fadeOut(
+                        animationSpec = tween(
+                            durationMillis = durationMillis - 120,
+                            easing = FastOutSlowInEasing,
+                        ),
+                    )) using
+                    SizeTransform(
+                        clip = false,
+                        sizeAnimationSpec = { _, _ ->
+                            tween(
+                                durationMillis = durationMillis,
+                                easing = FastOutSlowInEasing,
+                            )
+                        },
+                    )
+            }
+        },
+        content = content,
+    )
+}
 
 /**
  * Visibility is `internal` so sibling widget packages (e.g. the playlist

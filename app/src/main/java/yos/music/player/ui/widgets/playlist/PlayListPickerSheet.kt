@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +58,9 @@ import yos.music.player.data.libraries.PlayListLibrary.addMusic
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.ui.theme.withNight
+import yos.music.player.ui.widgets.basic.SheetAnimatedContent
+import yos.music.player.ui.widgets.basic.SheetNavigationBackward
+import yos.music.player.ui.widgets.basic.SheetNavigationForward
 import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
 
 /**
@@ -149,6 +153,9 @@ fun PlayListPickerContent(
     // by default; the user can still tap "Create New Playlist" to make
     // a fresh target.
     var createMode by remember { mutableStateOf(songToAdd == null && !bulkMode) }
+    val navigationDirection = remember {
+        mutableIntStateOf(SheetNavigationForward)
+    }
     var newPlaylistName by remember { mutableStateOf("") }
     var nameError by remember { mutableStateOf<String?>(null) }
 
@@ -203,89 +210,96 @@ fun PlayListPickerContent(
         }
     }
 
-    // Back-arrow logic:
-    //   - In Create mode entered from the list view, back pops to List.
-    //   - In List mode, back invokes the host-provided [onBack] when
-    //     given so the host can pop one level further.
-    //   - In create-only mode (no songToAdd, no bulk source), there is
-    //     no internal List to return to, so back falls through to
-    //     [onBack] — or is hidden if [onBack] is null.
-    val headerBack: (() -> Unit)? = when {
-        createMode && (songToAdd != null || bulkMode) -> {
-            {
-                createMode = false
-                newPlaylistName = ""
-                nameError = null
-            }
-        }
-        else -> onBack
-    }
-    PickerHeader(
-        title = if (createMode) {
-            stringResource(R.string.playlist_picker_create_title)
-        } else {
-            stringResource(R.string.playlist_picker_title)
-        },
-        onBack = headerBack,
-    )
-
-    Spacer(modifier = Modifier.height(8.dp))
-
-    if (createMode) {
-        CreatePlaylistBody(
-            name = newPlaylistName,
-            onNameChange = {
-                newPlaylistName = it
-                nameError = null
-            },
-            errorMessage = nameError,
-            onConfirm = confirmCreate,
-            onCancel = if (songToAdd == null && !bulkMode) finish else {
+    SheetAnimatedContent(
+        targetState = createMode,
+        navigationDirection = navigationDirection.intValue,
+        modifier = Modifier.fillMaxWidth(),
+        label = "PlayListPickerContent",
+    ) { creatingPlayList ->
+        val headerBack: (() -> Unit)? = when {
+            creatingPlayList && (songToAdd != null || bulkMode) -> {
                 {
+                    navigationDirection.intValue = SheetNavigationBackward
                     createMode = false
                     newPlaylistName = ""
                     nameError = null
                 }
+            }
+
+            onBack != null -> {
+                {
+                    navigationDirection.intValue = SheetNavigationBackward
+                    onBack()
+                }
+            }
+
+            else -> null
+        }
+
+        PickerHeader(
+            title = if (creatingPlayList) {
+                stringResource(R.string.playlist_picker_create_title)
+            } else {
+                stringResource(R.string.playlist_picker_title)
             },
-        )
-    } else {
-        // Picker mode: "Create New Playlist" entry + list of existing playlists.
-        CreateNewRow(
-            onClick = {
-                Vibrator.click(context)
-                createMode = true
-            },
+            onBack = headerBack,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
-        Divider()
 
-        ExistingPlayListList(
-            songToAdd = songToAdd,
-            excludeId = bulkAddSource?.listID,
-            onAdd = { playlist ->
-                if (bulkMode) {
-                    // PRD FR-M-08: hand off to the host. The host
-                    // performs the bulk insert; the picker just
-                    // closes once the tap is consumed.
-                    onBulkAdd?.invoke(playlist)
-                } else if (songToAdd != null) {
-                    // PRD FR-E-13: duplicates are allowed across the
-                    // app. The picker no longer dedupes — adding the
-                    // same song twice produces two distinct entries.
-                    playlist.addMusic(songToAdd)
-                    Toast.makeText(
-                        context,
-                        context.getString(
-                            R.string.playlist_picker_added_toast,
-                            playlist.name,
-                        ),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-                finish()
-            },
-        )
+        if (creatingPlayList) {
+            CreatePlaylistBody(
+                name = newPlaylistName,
+                onNameChange = {
+                    newPlaylistName = it
+                    nameError = null
+                },
+                errorMessage = nameError,
+                onConfirm = confirmCreate,
+                onCancel = if (songToAdd == null && !bulkMode) {
+                    finish
+                } else {
+                    {
+                        navigationDirection.intValue = SheetNavigationBackward
+                        createMode = false
+                        newPlaylistName = ""
+                        nameError = null
+                    }
+                },
+            )
+        } else {
+            CreateNewRow(
+                onClick = {
+                    Vibrator.click(context)
+                    navigationDirection.intValue = SheetNavigationForward
+                    createMode = true
+                },
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Divider()
+
+            ExistingPlayListList(
+                songToAdd = songToAdd,
+                excludeId = bulkAddSource?.listID,
+                onAdd = { playlist ->
+                    if (bulkMode) {
+                        onBulkAdd?.invoke(playlist)
+                    } else if (songToAdd != null) {
+                        playlist.addMusic(songToAdd)
+                        Toast.makeText(
+                            context,
+                            context.getString(
+                                R.string.playlist_picker_added_toast,
+                                playlist.name,
+                            ),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    finish()
+                },
+            )
+        }
     }
 }
 

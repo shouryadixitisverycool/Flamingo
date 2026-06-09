@@ -166,6 +166,7 @@ import yos.music.player.ui.pages.NowPlayingPage.Lyric
 import yos.music.player.ui.pages.NowPlayingPage.PlayingList
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.UI
+import yos.music.player.ui.markNextNavigationFromNowPlaying
 import yos.music.player.ui.toUI
 import yos.music.player.ui.widgets.YosLyricView
 import yos.music.player.ui.widgets.effects.YosFloatingLight
@@ -173,6 +174,9 @@ import yos.music.player.ui.widgets.audio.MusicQualityIndicator
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import yos.music.player.ui.widgets.basic.ActionItem
+import yos.music.player.ui.widgets.basic.SheetAnimatedContent
+import yos.music.player.ui.widgets.basic.SheetNavigationBackward
+import yos.music.player.ui.widgets.basic.SheetNavigationForward
 import yos.music.player.ui.widgets.basic.ActionSheetBody
 import yos.music.player.ui.widgets.basic.ImageQuality
 import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
@@ -221,7 +225,7 @@ fun NowPlaying(
     mainViewModel: MainViewModel,
     mediaViewModel: MediaViewModel,
     navController: NavController,
-    onMinimizeNowPlaying: () -> Unit,
+    onMinimizeNowPlaying: suspend () -> Unit,
     isPlayingStatusLambda: () -> Boolean,
     isPlayingOnChanged: (Boolean) -> Unit,
     nowPageLambda: () -> String,
@@ -1203,7 +1207,7 @@ private fun Lyric(
 @Composable
 private fun ActionButtonsRow(
     navController: NavController,
-    onMinimizeNowPlaying: () -> Unit,
+    onMinimizeNowPlaying: suspend () -> Unit,
     musicPlayingLambda: () -> YosMediaItem?,
 ) {
     Row(
@@ -1355,13 +1359,14 @@ private fun NowPlayingOverflowSheet(
     isOpen: MutableState<Boolean>,
     song: YosMediaItem?,
     navController: NavController,
-    onMinimizeNowPlaying: () -> Unit,
+    onMinimizeNowPlaying: suspend () -> Unit,
 ) {
     if (!isOpen.value) return
 
-    // Internal navigation. Defaults to [OverflowScreen.Menu]; resets each
-    // time the sheet is dismissed.
     var screen by remember { mutableStateOf(OverflowScreen.Menu) }
+    val navigationDirection = remember {
+        mutableIntStateOf(SheetNavigationForward)
+    }
 
     // Skip the partially-expanded state so the sheet always settles at the
     // height of its current content. The body swaps between screens of
@@ -1372,34 +1377,53 @@ private fun NowPlayingOverflowSheet(
 
     val onDismiss: () -> Unit = {
         isOpen.value = false
-        // Reset so the next open lands on the Menu screen.
         screen = OverflowScreen.Menu
+        navigationDirection.intValue = SheetNavigationForward
     }
 
     YosBottomSheetDialog(
         bottomSheetState = sheetState,
         onDismissRequest = onDismiss,
     ) {
-        when (screen) {
-            OverflowScreen.Menu -> OverflowMenuBody(
-                song = song,
-                navController = navController,
-                onMinimizeNowPlaying = onMinimizeNowPlaying,
-                onDismiss = onDismiss,
-                onPickPlaylist = { screen = OverflowScreen.Playlist },
-                onPickSleepTimer = { screen = OverflowScreen.SleepTimer },
-            )
+        SheetAnimatedContent(
+            targetState = screen,
+            navigationDirection = navigationDirection.intValue,
+            modifier = Modifier.fillMaxWidth(),
+            label = "NowPlayingOverflowSheet",
+        ) { currentScreen ->
+            when (currentScreen) {
+                OverflowScreen.Menu -> OverflowMenuBody(
+                    song = song,
+                    navController = navController,
+                    onMinimizeNowPlaying = onMinimizeNowPlaying,
+                    onDismiss = onDismiss,
+                    onPickPlaylist = {
+                        navigationDirection.intValue = SheetNavigationForward
+                        screen = OverflowScreen.Playlist
+                    },
+                    onPickSleepTimer = {
+                        navigationDirection.intValue = SheetNavigationForward
+                        screen = OverflowScreen.SleepTimer
+                    },
+                )
 
-            OverflowScreen.Playlist -> PlayListPickerContent(
-                songToAdd = song,
-                onDone = onDismiss,
-                onBack = { screen = OverflowScreen.Menu },
-            )
+                OverflowScreen.Playlist -> PlayListPickerContent(
+                    songToAdd = song,
+                    onDone = onDismiss,
+                    onBack = {
+                        navigationDirection.intValue = SheetNavigationBackward
+                        screen = OverflowScreen.Menu
+                    },
+                )
 
-            OverflowScreen.SleepTimer -> SleepTimerContent(
-                onDone = onDismiss,
-                onBack = { screen = OverflowScreen.Menu },
-            )
+                OverflowScreen.SleepTimer -> SleepTimerContent(
+                    onDone = {},
+                    onBack = {
+                        navigationDirection.intValue = SheetNavigationBackward
+                        screen = OverflowScreen.Menu
+                    },
+                )
+            }
         }
     }
 }
@@ -1410,7 +1434,7 @@ private enum class OverflowScreen { Menu, Playlist, SleepTimer }
 private fun OverflowMenuBody(
     song: YosMediaItem?,
     navController: NavController,
-    onMinimizeNowPlaying: () -> Unit,
+    onMinimizeNowPlaying: suspend () -> Unit,
     onDismiss: () -> Unit,
     onPickPlaylist: () -> Unit,
     onPickSleepTimer: () -> Unit,
@@ -1468,10 +1492,11 @@ private fun OverflowMenuBody(
 private fun NowPlayingOverflowHeader(
     song: YosMediaItem,
     navController: NavController,
-    onMinimizeNowPlaying: () -> Unit,
+    onMinimizeNowPlaying: suspend () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val shape = YosRoundedCornerShape(8.dp)
     val targetArtistNames = remember(song) {
         song.artistsList.orEmpty().filter { it.isNotBlank() }
@@ -1541,9 +1566,12 @@ private fun NowPlayingOverflowHeader(
 
                         LibraryObject.setTargetArtistName(artistName)
                         LibraryObject.setArtistSongsSearchOnOpen(false)
+                        navController.markNextNavigationFromNowPlaying()
                         onDismiss()
-                        onMinimizeNowPlaying()
-                        navController.toUI(UI.ArtistInfo)
+                        coroutineScope.launch {
+                            onMinimizeNowPlaying()
+                            navController.toUI(UI.ArtistInfo)
+                        }
                     },
                 )
             } else if (!song.artists.isNullOrBlank()) {
@@ -1571,9 +1599,12 @@ private fun NowPlayingOverflowHeader(
                         ) {
                             val albumName = targetAlbumName ?: return@clickable
                             LibraryObject.setTargetAlbumName(albumName)
+                            navController.markNextNavigationFromNowPlaying()
                             onDismiss()
-                            onMinimizeNowPlaying()
-                            navController.toUI(UI.AlbumInfo)
+                            coroutineScope.launch {
+                                onMinimizeNowPlaying()
+                                navController.toUI(UI.AlbumInfo)
+                            }
                         },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1587,7 +1618,7 @@ private fun NowPlayingOverflowHeader(
 private fun PlayingBar(
     modifier: Modifier,
     navController: NavController,
-    onMinimizeNowPlaying: () -> Unit,
+    onMinimizeNowPlaying: suspend () -> Unit,
     albumUrlLambda: () -> Uri?,
     musicPlayingLambda: () -> YosMediaItem?,
     onAlbumClick: () -> Unit

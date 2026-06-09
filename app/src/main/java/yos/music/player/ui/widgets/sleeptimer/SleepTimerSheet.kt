@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -54,6 +55,9 @@ import yos.music.player.code.SleepTimerState
 import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.ui.theme.withNight
+import yos.music.player.ui.widgets.basic.SheetAnimatedContent
+import yos.music.player.ui.widgets.basic.SheetNavigationBackward
+import yos.music.player.ui.widgets.basic.SheetNavigationForward
 import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
 
 /**
@@ -100,21 +104,52 @@ fun SleepTimerContent(
     onBack: (() -> Unit)? = null,
 ) {
     var screen by remember { mutableStateOf(Screen.Presets) }
+    val navigationDirection = remember {
+        mutableIntStateOf(SheetNavigationForward)
+    }
 
-    when (screen) {
-        Screen.Presets -> PresetScreen(
-            onPicked = { onDone() },
-            onOpenCustom = { screen = Screen.Custom },
-            onOpenFade = { screen = Screen.Fade },
-            onBack = onBack,
-        )
-        Screen.Custom -> CustomScreen(
-            onCancel = { screen = Screen.Presets },
-            onConfirm = { onDone() },
-        )
-        Screen.Fade -> FadeScreen(
-            onBack = { screen = Screen.Presets },
-        )
+    SheetAnimatedContent(
+        targetState = screen,
+        navigationDirection = navigationDirection.intValue,
+        modifier = Modifier.fillMaxWidth(),
+        label = "SleepTimerContent",
+    ) { currentScreen ->
+        when (currentScreen) {
+            Screen.Presets -> PresetScreen(
+                onPicked = {
+                    screen = Screen.Presets
+                    onDone()
+                },
+                onOpenCustom = {
+                    navigationDirection.intValue = SheetNavigationForward
+                    screen = Screen.Custom
+                },
+                onOpenFade = {
+                    navigationDirection.intValue = SheetNavigationForward
+                    screen = Screen.Fade
+                },
+                onBack = onBack,
+            )
+
+            Screen.Custom -> CustomScreen(
+                onCancel = {
+                    navigationDirection.intValue = SheetNavigationBackward
+                    screen = Screen.Presets
+                },
+                onConfirm = {
+                    navigationDirection.intValue = SheetNavigationBackward
+                    screen = Screen.Presets
+                    onDone()
+                },
+            )
+
+            Screen.Fade -> FadeScreen(
+                onBack = {
+                    navigationDirection.intValue = SheetNavigationBackward
+                    screen = Screen.Presets
+                },
+            )
+        }
     }
 }
 
@@ -133,6 +168,22 @@ private fun PresetScreen(
 ) {
     val timerState by SleepTimer.state
     val activeOption = (timerState as? SleepTimerState.Active)?.option
+    val activeDurationOption = activeOption as? SleepTimerOption.Duration
+    val durationPresetMinutes = remember { listOf(5, 15, 30, 60) }
+    val highlightedDurationMs = rememberSaveable(key = "PresetScreen_highlightedDurationMs") {
+        mutableLongStateOf(0L)
+    }
+
+    LaunchedEffect(activeDurationOption?.durationMs) {
+        if (activeDurationOption == null) {
+            highlightedDurationMs.longValue = 0L
+        } else if (
+            highlightedDurationMs.longValue == 0L &&
+            durationPresetMinutes.any { it * 60_000L == activeDurationOption.durationMs }
+        ) {
+            highlightedDurationMs.longValue = activeDurationOption.durationMs
+        }
+    }
 
     SheetTitle(text = stringResource(R.string.sleep_timer_title), onBack = onBack)
 
@@ -168,15 +219,22 @@ private fun PresetScreen(
     Divider()
     Spacer(modifier = Modifier.height(4.dp))
 
-    val durationPresetMinutes = remember { listOf(5, 15, 30, 60) }
     durationPresetMinutes.forEach { minutes ->
         val durationMs = minutes * 60_000L
         PresetRow(
-            label = stringResource(R.string.sleep_timer_minutes, minutes),
-            selected = activeOption is SleepTimerOption.Duration &&
-                activeOption.durationMs == durationMs,
+            label = stringResource(
+                if (activeDurationOption != null) {
+                    R.string.sleep_timer_add_minutes
+                } else {
+                    R.string.sleep_timer_minutes
+                },
+                minutes,
+            ),
+            selected = highlightedDurationMs.longValue == durationMs ||
+                activeDurationOption?.durationMs == durationMs,
             onClick = {
-                SleepTimer.start(SleepTimerOption.Duration(durationMs))
+                highlightedDurationMs.longValue = durationMs
+                SleepTimer.addDuration(durationMs)
                 onPicked()
             },
         )
@@ -416,7 +474,7 @@ private fun CustomScreen(onCancel: () -> Unit, onConfirm: () -> Unit) {
             .clickable(enabled = canStart) {
                 Vibrator.click(context)
                 val total = hours * 3_600_000L + minutes * 60_000L
-                SleepTimer.start(SleepTimerOption.Duration(total))
+                SleepTimer.addDuration(total)
                 onConfirm()
             },
         contentAlignment = Alignment.Center,

@@ -2,6 +2,7 @@ package yos.music.player.ui.pages.library.albums
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -68,6 +69,7 @@ import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.libraries.toMultipleArtists
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
+import yos.music.player.ui.consumeNowPlayingNavigationMarker
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
 import yos.music.player.ui.pages.library.MusicList
@@ -92,7 +94,22 @@ fun AlbumInfo(
     navController: NavController,
     sharedTransitionScope: SharedTransitionScope,
     animatedContentScope: AnimatedContentScope,
+    onBackToNowPlaying: () -> Unit = { navController.popBackStack() },
 ) {
+    val openedFromNowPlaying = rememberSaveable(key = "AlbumInfo_openedFromNowPlaying") {
+        mutableStateOf(navController.consumeNowPlayingNavigationMarker())
+    }
+    val handleBack: () -> Unit = {
+        if (openedFromNowPlaying.value) {
+            openedFromNowPlaying.value = false
+            onBackToNowPlaying()
+        } else {
+            navController.popBackStack()
+        }
+    }
+
+    BackHandler(onBack = handleBack)
+
     val albumName = rememberSaveable(key = "AlbumInfo_albumName") {
         mutableStateOf(LibraryObject.getTargetAlbumName())
     }
@@ -107,9 +124,7 @@ fun AlbumInfo(
     if (showEmptyState.value) {
         Title(
             title = stringResource(id = R.string.page_library_album_info_title),
-            onBack = {
-                navController.popBackStack()
-            },
+            onBack = handleBack,
         ) {
             item("AlbumInfo_empty") {
                 Column(
@@ -251,9 +266,7 @@ fun AlbumInfo(
         enableSearch = true,
         searchModeActive = searchModeActive.value,
         searchRequestFocusSignal = searchFocusSignal.value,
-        onBack = {
-            navController.popBackStack()
-        },
+        onBack = handleBack,
         onSort = {
             sortSheetOpen.value = true
         },

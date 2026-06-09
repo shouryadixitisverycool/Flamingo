@@ -48,6 +48,8 @@ interface UI {
     }
 }
 
+private const val ReturnToNowPlayingOnBackKey = "ReturnToNowPlayingOnBackKey"
+
 
 fun NavController.toUI(route: String, data: String? = null) {
     if (data.isNullOrEmpty()) {
@@ -63,4 +65,14 @@ fun getNavUri(route: String, data: String? = null): String {
     } else {
         "$route/$data"
     }
+}
+
+fun NavController.markNextNavigationFromNowPlaying()
+{
+    currentBackStackEntry?.savedStateHandle?.set(ReturnToNowPlayingOnBackKey, true)
+}
+
+fun NavController.consumeNowPlayingNavigationMarker(): Boolean
+{
+    return previousBackStackEntry?.savedStateHandle?.remove<Boolean>(ReturnToNowPlayingOnBackKey) == true
 }

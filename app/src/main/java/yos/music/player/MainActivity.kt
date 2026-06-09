@@ -269,6 +269,15 @@ class MainActivity : BaseActivity() {
                             }
 
                         val hazeState = remember { HazeState() }
+                        val reopenNowPlaying: () -> Unit = {
+                            nowPageNowPlaying.value = Album
+                            scope.launch {
+                                offsetY.animateTo(
+                                    parentHeight.intValue.toFloat(),
+                                    animationSpec = navSpec,
+                                )
+                            }
+                        }
 
                         YosWrapper {
                             val isNight = isFlamingoInDarkMode()
@@ -457,7 +466,13 @@ class MainActivity : BaseActivity() {
                                                 LocalArtists(navController)
                                             }
                                             composable(UI.ArtistInfo) {
-                                                ArtistInfo(navController)
+                                                ArtistInfo(
+                                                    navController = navController,
+                                                    onBackToNowPlaying = {
+                                                        navController.popBackStack()
+                                                        reopenNowPlaying()
+                                                    },
+                                                )
                                             }
                                             composable(UI.ArtistSongs) {
                                                 ArtistSongs(navController)
@@ -465,9 +480,13 @@ class MainActivity : BaseActivity() {
 
                                             composable(UI.AlbumInfo) {
                                                 AlbumInfo(
-                                                    navController,
-                                                    this@SharedTransitionLayout,
-                                                    this@composable
+                                                    navController = navController,
+                                                    sharedTransitionScope = this@SharedTransitionLayout,
+                                                    animatedContentScope = this@composable,
+                                                    onBackToNowPlaying = {
+                                                        navController.popBackStack()
+                                                        reopenNowPlaying()
+                                                    },
                                                 )
                                             }
 
@@ -873,9 +892,7 @@ class MainActivity : BaseActivity() {
                                                 navController = navController,
                                                 onMinimizeNowPlaying = {
                                                     nowPageNowPlaying.value = Album
-                                                    scope.launch {
-                                                        offsetY.animateTo(0f, animationSpec = navSpec)
-                                                    }
+                                                    offsetY.animateTo(0f, animationSpec = navSpec)
                                                 },
                                                 isPlayingStatusLambda = { isPlaying.value },
                                                 isPlayingOnChanged = {
