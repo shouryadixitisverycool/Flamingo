@@ -39,6 +39,8 @@ class YosBasicApplication : Application() {
         // 初始化 MMKV
         MMKV.initialize(this)
 
+        yos.music.player.code.ListenHistoryManager.loadHistory()
+
         val gson =
             GsonBuilder()
             //.registerTypeAdapter(Uri::class.java, UriSerializer())

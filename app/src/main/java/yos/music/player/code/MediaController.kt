@@ -706,6 +706,8 @@ class YosPlaybackService : MediaSessionService() {
         }
     }
 
+    private var listenHistoryTracker: ListenHistoryTracker? = null
+
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
@@ -725,9 +727,8 @@ class YosPlaybackService : MediaSessionService() {
                 )
                 .setExtensionRendererMode(
                     when (SettingsLibrary.Codec) {
-                        "Auto" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
                         "System" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-                        else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+                        else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
                     }
                 )
         )
@@ -751,6 +752,9 @@ class YosPlaybackService : MediaSessionService() {
                 return FadeExo.targetStatus != 0
             }
         }
+
+        listenHistoryTracker = ListenHistoryTracker(player)
+        listenHistoryTracker?.start()
 
         forwardingPlayer.addListener(
             object : Player.Listener {
@@ -839,6 +843,8 @@ class YosPlaybackService : MediaSessionService() {
 
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     /*mediaSession?.let { MediaController.sendNotification(it,context) }*/
+                    listenHistoryTracker?.onTrackChanged()
+
                     mediaItem?.let {
                         yos.music.player.code.MediaController.syncQueueStateFromController(
                             player,
@@ -1055,6 +1061,8 @@ class YosPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        listenHistoryTracker?.stop()
+        listenHistoryTracker = null
         mediaSession?.run {
             player.release()
             release()
