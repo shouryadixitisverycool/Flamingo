@@ -10,6 +10,7 @@
     <string name="page_library_title">资料库</string>
     <string name="home_recommend_title">试试这些</string>
     <string name="home_recommend_subtitle">来自你的资料库</string>
+    <string name="home_recently_played_title">最近播放</string>
     <string name="playlist_unavailable_title">未能显示播放列表</string>
     <string name="tip_scanning">正在从资料库拉取歌曲…</string>
     <string name="tip_no_song">没有播放项目。</string>

@@ -10,6 +10,7 @@
     <string name="page_library_title">資料庫</string>
     <string name="home_recommend_title">試試這些</string>
     <string name="home_recommend_subtitle">來自你的資料庫</string>
+    <string name="home_recently_played_title">最近播放</string>
     <string name="playlist_unavailable_title">未能顯示播放清單</string>
     <string name="tip_scanning">正在從資料庫拉取歌曲…</string>
     <string name="tip_no_song">沒有播放項目。</string>

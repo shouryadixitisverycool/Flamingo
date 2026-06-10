@@ -10,6 +10,7 @@
     <string name="page_library_title">ライブラリ</string>
     <string name="home_recommend_title">これらを試してみてください</string>
     <string name="home_recommend_subtitle">あなたのライブラリから</string>
+    <string name="home_recently_played_title">最近再生した曲</string>
     <string name="playlist_unavailable_title">プレイリストを表示できません</string>
     <string name="tip_scanning">ライブラリから曲を取得中…</string>
     <string name="tip_no_song">再生項目がありません。</string>

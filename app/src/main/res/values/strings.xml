@@ -10,6 +10,7 @@
     <string name="page_library_title">Library</string>
     <string name="home_recommend_title">Try These</string>
     <string name="home_recommend_subtitle">From Your Library</string>
+    <string name="home_recently_played_title">Recently Played</string>
     <string name="playlist_unavailable_title">Unable to Display Playlist</string>
     <string name="tip_scanning">Pulling songs from the library…</string>
     <string name="tip_no_song">No items to play.</string>
