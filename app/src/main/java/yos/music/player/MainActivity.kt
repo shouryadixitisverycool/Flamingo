@@ -122,6 +122,9 @@ import yos.music.player.ui.UI.Settings.Companion.ExoplayerSetting
 import yos.music.player.ui.pages.HomeNav
 import yos.music.player.ui.pages.NowPlaying
 import yos.music.player.ui.pages.NowPlayingPage.Album
+import yos.music.player.ui.pages.StatsAlbums
+import yos.music.player.ui.pages.StatsArtists
+import yos.music.player.ui.pages.StatsTracks
 import yos.music.player.ui.pages.library.Library
 import yos.music.player.ui.pages.library.NormalMusic
 import yos.music.player.ui.pages.library.albums.AlbumInfo
@@ -308,7 +311,7 @@ class MainActivity : BaseActivity() {
                             mutableStateOf(defaultHome)
                         }
 
-                        val pagerState = rememberPagerState(pageCount = { 2 })
+                        val pagerState = rememberPagerState(pageCount = { 3 })
 
                         // 以下为实际显示
 
@@ -470,6 +473,16 @@ class MainActivity : BaseActivity() {
                                                 )
                                             }
 
+                                            composable(UI.StatsArtists) {
+                                                StatsArtists(navController)
+                                            }
+                                            composable(UI.StatsAlbums) {
+                                                StatsAlbums(navController)
+                                            }
+                                            composable(UI.StatsTracks) {
+                                                StatsTracks(navController)
+                                            }
+
                                             composable(UI.Settings.Main) {
                                                 Settings(
                                                     navController
@@ -598,12 +611,15 @@ class MainActivity : BaseActivity() {
                                                     context.getString(R.string.page_home_title)
                                                 val library =
                                                     context.getString(R.string.page_library_title)
+                                                val stats =
+                                                    context.getString(R.string.page_stats_title)
                                                 if (route.value == UI.HomePage) {
                                                     scope.launch {
                                                         pagerState.animateScrollToPage(
                                                             when (it) {
                                                                 home -> 0
                                                                 library -> 1
+                                                                stats -> 2
                                                                 else -> 0
                                                             }
                                                         )
@@ -614,6 +630,7 @@ class MainActivity : BaseActivity() {
                                                             when (it) {
                                                                 home -> 0
                                                                 library -> 1
+                                                                stats -> 2
                                                                 else -> 0
                                                             }
                                                         )
@@ -632,6 +649,10 @@ class MainActivity : BaseActivity() {
                                                 NavItem(
                                                     stringResource(id = R.string.page_library_title),
                                                     R.drawable.ic_uitabbar_library
+                                                ),
+                                                NavItem(
+                                                    stringResource(id = R.string.page_stats_title),
+                                                    R.drawable.ic_uitabbar_stats
                                                 )
                                             ),
                                             modifier = Modifier

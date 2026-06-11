@@ -28,6 +28,10 @@ interface UI {
         const val AlbumInfo = "AlbumInfo"
         const val ArtistInfo = "ArtistInfo"
         const val ArtistSongs = "ArtistSongs"
+
+        const val StatsArtists = "StatsArtists"
+        const val StatsAlbums = "StatsAlbums"
+        const val StatsTracks = "StatsTracks"
     }
 
     @Stable
