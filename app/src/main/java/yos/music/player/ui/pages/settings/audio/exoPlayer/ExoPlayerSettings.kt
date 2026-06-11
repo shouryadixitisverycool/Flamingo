@@ -54,10 +54,9 @@ fun ExoPlayerSettings(navController: NavController) =
                                 title = stringResource(id = R.string.settings_audio_exoplayer_decode_codec),
                                 items = listOf(
                                     "Auto",
-                                    "FFmpeg",
                                     "System"
                                 ),
-                                value = SettingsLibrary.Codec,
+                                value = if (SettingsLibrary.Codec == "FFmpeg") "Auto" else SettingsLibrary.Codec,
                                 onValueChange = {
                                     SettingsLibrary.Codec = it
                                 }

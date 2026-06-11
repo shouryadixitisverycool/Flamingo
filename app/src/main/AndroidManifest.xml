@@ -26,7 +26,6 @@
         tools:targetApi="tiramisu"
         android:hardwareAccelerated="true"
         android:name=".YosBasicApplication"
-        android:extractNativeLibs="true"
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"
         android:appCategory="audio"

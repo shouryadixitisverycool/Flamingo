@@ -39,7 +39,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.flaviofaria.kenburnsview.KenBurnsView
 import com.flaviofaria.kenburnsview.RandomTransitionGenerator
-import com.google.android.renderscript.Toolkit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import yos.music.player.code.utils.others.BitmapResolver
@@ -222,6 +221,6 @@ fun imageResolve(image: Bitmap, moreLight: Boolean = false): Bitmap {
             drawColor((0x40000000).toInt())
         }
     }
-    resizedBitmap = Toolkit.blur(resizedBitmap, 25)
+    resizedBitmap = BitmapResolver.blurBitmap(resizedBitmap, 25)
     return resizedBitmap
 }

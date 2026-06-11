@@ -85,18 +85,9 @@ android {
         compose true
     }
 
-    sourceSets {
-        main {
-            jniLibs.srcDirs = ["libs"]
-        }
-    }
-
     packagingOptions {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
-        }
-        jniLibs {
-            useLegacyPackaging true
         }
     }
 
@@ -108,7 +99,10 @@ android {
 }
 
 dependencies {
-    implementation fileTree(include: ["*.*"], dir: "libs")
+    implementation files(
+        "libs/kenburnsview-1.0.7.aar",
+        "libs/libPhonograph-release.aar"
+    )
     implementation project(":overscroll_core")
 
     implementation 'androidx.core:core-ktx:1.13.1'
