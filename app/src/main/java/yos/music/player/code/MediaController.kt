@@ -707,6 +707,7 @@ class YosPlaybackService : MediaSessionService() {
     }
 
     private var listenHistoryTracker: ListenHistoryTracker? = null
+    private var listenStatsTracker: ListenStatsTracker? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -755,6 +756,9 @@ class YosPlaybackService : MediaSessionService() {
 
         listenHistoryTracker = ListenHistoryTracker(player)
         listenHistoryTracker?.start()
+
+        listenStatsTracker = ListenStatsTracker(player)
+        listenStatsTracker?.start()
 
         forwardingPlayer.addListener(
             object : Player.Listener {
@@ -844,6 +848,7 @@ class YosPlaybackService : MediaSessionService() {
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     /*mediaSession?.let { MediaController.sendNotification(it,context) }*/
                     listenHistoryTracker?.onTrackChanged()
+                    listenStatsTracker?.onTrackChanged()
 
                     mediaItem?.let {
                         yos.music.player.code.MediaController.syncQueueStateFromController(
@@ -1063,6 +1068,8 @@ class YosPlaybackService : MediaSessionService() {
     override fun onDestroy() {
         listenHistoryTracker?.stop()
         listenHistoryTracker = null
+        listenStatsTracker?.stop()
+        listenStatsTracker = null
         mediaSession?.run {
             player.release()
             release()

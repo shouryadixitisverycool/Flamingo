@@ -227,6 +227,16 @@ object SettingsLibrary {
     )
 
     /**
+     * 聆听统计 - 上次选择的时间段
+     */
+    @Stable
+    var StatsSelectedPeriod by mutableDataSaverStateOf(
+        dataSaverInterface = SettingsSaver,
+        key = "settings_stats_selected_period",
+        initialValue = 0
+    )
+
+    /**
      * 状态栏歌词
      */
     @Stable

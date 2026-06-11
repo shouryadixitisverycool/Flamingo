@@ -41,6 +41,8 @@ class YosBasicApplication : Application() {
 
         yos.music.player.code.ListenHistoryManager.loadHistory()
 
+        yos.music.player.code.ListenStatsManager.loadEvents()
+
         val gson =
             GsonBuilder()
             //.registerTypeAdapter(Uri::class.java, UriSerializer())
