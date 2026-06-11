@@ -150,6 +150,11 @@ fun Settings(navController: NavController) =
                         ListHeader(content = stringResource(id = R.string.settings_play_history_desc))
 
                         GroupSpacer()
+                        ListHeader(stringResource(id = R.string.settings_stats))
+                        StatsDataSection()
+                        ListHeader(content = stringResource(id = R.string.settings_stats_desc))
+
+                        GroupSpacer()
                         ListHeader(stringResource(id = R.string.settings_extend))
                         RoundColumn {
                             LabelItem(
