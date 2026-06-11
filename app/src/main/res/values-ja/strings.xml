@@ -212,4 +212,43 @@
     <string name="playlist_unpin_toast">Unpinned “%1$s”</string>
     <string name="playlist_pin_reorder_done">Done</string>
     <string name="playlist_pin_reorder_hint">Drag to reorder pinned playlists</string>
+
+    <!-- Listening statistics -->
+    <string name="page_stats_title">統計</string>
+    <string name="stats_period_today">今日</string>
+    <string name="stats_period_this_week">今週</string>
+    <string name="stats_period_this_month">今月</string>
+    <string name="stats_period_this_year">今年</string>
+    <string name="stats_period_all_time">全期間</string>
+    <string name="stats_minutes_today">分（今日）</string>
+    <string name="stats_minutes_this_week">分（今週）</string>
+    <string name="stats_minutes_this_month">分（今月）</string>
+    <string name="stats_minutes_this_year">分（今年）</string>
+    <string name="stats_minutes_all_time">分（全期間）</string>
+    <string name="stats_across_summary">%1$s 曲・%2$s 枚のアルバム</string>
+    <string name="stats_artists_title">アーティスト</string>
+    <string name="stats_albums_title">アルバム</string>
+    <string name="stats_tracks_title">トラック</string>
+    <string name="stats_minutes_label">%s 分</string>
+    <string name="stats_empty_hint">音楽を聴くとここに統計が表示されます</string>
+    <string name="stats_track_missing_toast">この曲はライブラリに存在しません</string>
+    <string name="stats_missing_indicator">ライブラリにありません</string>
+    <string name="settings_stats">リスニング統計</string>
+    <string name="settings_stats_export">統計をエクスポート</string>
+    <string name="settings_stats_import">統計をインポート</string>
+    <string name="settings_stats_clear">統計データを消去</string>
+    <string name="settings_stats_desc">統計は再生履歴が有効な場合にのみ収集され、このデバイスから外部に送信されることはありません。</string>
+    <string name="settings_stats_clear_confirm_title">統計データを消去しますか？</string>
+    <string name="settings_stats_clear_confirm_message">すべてのリスニング統計が完全に削除されます。この操作は取り消せません。</string>
+    <string name="settings_stats_clear_confirm_action">消去</string>
+    <string name="settings_stats_clear_done_toast">統計を消去しました</string>
+    <string name="settings_stats_import_title">統計をインポート</string>
+    <string name="settings_stats_import_message">既存の統計と統合しますか、それとも置き換えますか？</string>
+    <string name="settings_stats_import_merge">統合</string>
+    <string name="settings_stats_import_replace">置き換え</string>
+    <string name="settings_stats_import_done_toast">統計をインポートしました</string>
+    <string name="settings_stats_import_failed_toast">インポート失敗：無効なファイル</string>
+    <string name="settings_stats_export_done_toast">統計をエクスポートしました</string>
+    <string name="settings_stats_export_failed_toast">エクスポートに失敗しました</string>
+    <string name="settings_stats_cancel">キャンセル</string>
 </resources>

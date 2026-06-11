@@ -222,4 +222,43 @@
     <!-- Playlist overhaul: pin reorder mode -->
     <string name="playlist_pin_reorder_done">Done</string>
     <string name="playlist_pin_reorder_hint">Drag to reorder pinned playlists</string>
+
+    <!-- Listening statistics -->
+    <string name="page_stats_title">Stats</string>
+    <string name="stats_period_today">Today</string>
+    <string name="stats_period_this_week">This Week</string>
+    <string name="stats_period_this_month">This Month</string>
+    <string name="stats_period_this_year">This Year</string>
+    <string name="stats_period_all_time">All Time</string>
+    <string name="stats_minutes_today">minutes today</string>
+    <string name="stats_minutes_this_week">minutes this week</string>
+    <string name="stats_minutes_this_month">minutes this month</string>
+    <string name="stats_minutes_this_year">minutes this year</string>
+    <string name="stats_minutes_all_time">minutes all time</string>
+    <string name="stats_across_summary">across %1$s songs and %2$s albums</string>
+    <string name="stats_artists_title">Artists</string>
+    <string name="stats_albums_title">Albums</string>
+    <string name="stats_tracks_title">Tracks</string>
+    <string name="stats_minutes_label">%s minutes</string>
+    <string name="stats_empty_hint">Start listening to see your stats here</string>
+    <string name="stats_track_missing_toast">This song is no longer in your library</string>
+    <string name="stats_missing_indicator">Not in library</string>
+    <string name="settings_stats">Listening Statistics</string>
+    <string name="settings_stats_export">Export Statistics</string>
+    <string name="settings_stats_import">Import Statistics</string>
+    <string name="settings_stats_clear">Clear Statistics Data</string>
+    <string name="settings_stats_desc">Statistics are collected only while Play History is enabled and never leave this device.</string>
+    <string name="settings_stats_clear_confirm_title">Clear Statistics Data?</string>
+    <string name="settings_stats_clear_confirm_message">All listening statistics will be permanently deleted. This cannot be undone.</string>
+    <string name="settings_stats_clear_confirm_action">Clear</string>
+    <string name="settings_stats_clear_done_toast">Statistics cleared</string>
+    <string name="settings_stats_import_title">Import Statistics</string>
+    <string name="settings_stats_import_message">Merge with existing statistics or replace them entirely?</string>
+    <string name="settings_stats_import_merge">Merge</string>
+    <string name="settings_stats_import_replace">Replace</string>
+    <string name="settings_stats_import_done_toast">Statistics imported</string>
+    <string name="settings_stats_import_failed_toast">Import failed: invalid file</string>
+    <string name="settings_stats_export_done_toast">Statistics exported</string>
+    <string name="settings_stats_export_failed_toast">Export failed</string>
+    <string name="settings_stats_cancel">Cancel</string>
 </resources>

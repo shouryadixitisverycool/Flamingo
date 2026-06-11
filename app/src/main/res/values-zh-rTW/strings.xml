@@ -212,4 +212,43 @@
     <string name="playlist_unpin_toast">Unpinned “%1$s”</string>
     <string name="playlist_pin_reorder_done">Done</string>
     <string name="playlist_pin_reorder_hint">Drag to reorder pinned playlists</string>
+
+    <!-- Listening statistics -->
+    <string name="page_stats_title">統計</string>
+    <string name="stats_period_today">今天</string>
+    <string name="stats_period_this_week">本週</string>
+    <string name="stats_period_this_month">本月</string>
+    <string name="stats_period_this_year">今年</string>
+    <string name="stats_period_all_time">所有時間</string>
+    <string name="stats_minutes_today">分鐘（今天）</string>
+    <string name="stats_minutes_this_week">分鐘（本週）</string>
+    <string name="stats_minutes_this_month">分鐘（本月）</string>
+    <string name="stats_minutes_this_year">分鐘（今年）</string>
+    <string name="stats_minutes_all_time">分鐘（所有時間）</string>
+    <string name="stats_across_summary">共 %1$s 次播放，%2$s 張專輯</string>
+    <string name="stats_artists_title">藝人</string>
+    <string name="stats_albums_title">專輯</string>
+    <string name="stats_tracks_title">歌曲</string>
+    <string name="stats_minutes_label">%s 分鐘</string>
+    <string name="stats_empty_hint">開始聆聽後這裡會顯示你的統計資料</string>
+    <string name="stats_track_missing_toast">此歌曲已不在資料庫中</string>
+    <string name="stats_missing_indicator">不在資料庫中</string>
+    <string name="settings_stats">聆聽統計</string>
+    <string name="settings_stats_export">匯出統計資料</string>
+    <string name="settings_stats_import">匯入統計資料</string>
+    <string name="settings_stats_clear">清除統計資料</string>
+    <string name="settings_stats_desc">僅在啟用播放歷史時收集統計資料，資料不會離開此裝置。</string>
+    <string name="settings_stats_clear_confirm_title">清除統計資料？</string>
+    <string name="settings_stats_clear_confirm_message">所有聆聽統計資料將被永久刪除，此操作無法復原。</string>
+    <string name="settings_stats_clear_confirm_action">清除</string>
+    <string name="settings_stats_clear_done_toast">統計資料已清除</string>
+    <string name="settings_stats_import_title">匯入統計資料</string>
+    <string name="settings_stats_import_message">與現有統計資料合併，還是完全取代？</string>
+    <string name="settings_stats_import_merge">合併</string>
+    <string name="settings_stats_import_replace">取代</string>
+    <string name="settings_stats_import_done_toast">統計資料已匯入</string>
+    <string name="settings_stats_import_failed_toast">匯入失敗：檔案無效</string>
+    <string name="settings_stats_export_done_toast">統計資料已匯出</string>
+    <string name="settings_stats_export_failed_toast">匯出失敗</string>
+    <string name="settings_stats_cancel">取消</string>
 </resources>
