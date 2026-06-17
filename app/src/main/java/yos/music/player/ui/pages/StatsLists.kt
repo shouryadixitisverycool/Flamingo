@@ -23,29 +23,29 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import yos.music.player.R
 import yos.music.player.code.ListenStatsManager
-import yos.music.player.data.libraries.ListenStatsLibrary
 import yos.music.player.data.libraries.StatsAlbumEntry
 import yos.music.player.data.libraries.StatsArtistEntry
+import yos.music.player.data.libraries.StatsPeriodSnapshot
 import yos.music.player.data.libraries.StatsTrackEntry
 import yos.music.player.ui.widgets.basic.ImageQuality
 import yos.music.player.ui.widgets.basic.ShadowImageWithCache
 import yos.music.player.ui.widgets.basic.Title
 
 @Composable
-private fun rememberStatsPeriodEvents() = run {
-    val committedEvents = ListenStatsManager.statsEvents.value
+private fun rememberStatsSnapshot(): StatsPeriodSnapshot
+{
+    val cacheVersion = ListenStatsManager.statsCacheVersion.intValue
     val liveEvents = ListenStatsManager.liveSessionEvents.value
     val selectedPeriod = selectedStatsPeriod()
-    remember(committedEvents, liveEvents, selectedPeriod) {
-        ListenStatsLibrary.filterEventsForPeriod(committedEvents + liveEvents, selectedPeriod)
+    return remember(cacheVersion, liveEvents, selectedPeriod) {
+        ListenStatsManager.snapshotForPeriod(selectedPeriod, liveEvents)
     }
 }
 
 @Composable
 fun StatsArtists(navController: NavController)
 {
-    val periodEvents = rememberStatsPeriodEvents()
-    val artistEntries = remember(periodEvents) { ListenStatsLibrary.buildArtistEntries(periodEvents) }
+    val artistEntries = rememberStatsSnapshot().artistEntries
 
     Title(
         title = stringResource(id = R.string.stats_artists_title),
@@ -66,8 +66,7 @@ fun StatsArtists(navController: NavController)
 @Composable
 fun StatsAlbums(navController: NavController)
 {
-    val periodEvents = rememberStatsPeriodEvents()
-    val albumEntries = remember(periodEvents) { ListenStatsLibrary.buildAlbumEntries(periodEvents) }
+    val albumEntries = rememberStatsSnapshot().albumEntries
 
     Title(
         title = stringResource(id = R.string.stats_albums_title),
@@ -88,8 +87,7 @@ fun StatsAlbums(navController: NavController)
 @Composable
 fun StatsTracks(navController: NavController)
 {
-    val periodEvents = rememberStatsPeriodEvents()
-    val trackEntries = remember(periodEvents) { ListenStatsLibrary.buildTrackEntries(periodEvents) }
+    val trackEntries = rememberStatsSnapshot().trackEntries
 
     Title(
         title = stringResource(id = R.string.stats_tracks_title),

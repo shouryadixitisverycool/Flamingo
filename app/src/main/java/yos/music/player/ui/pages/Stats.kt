@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +43,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import yos.music.player.R
 import yos.music.player.code.ListenStatsManager
 import yos.music.player.code.MediaController
-import yos.music.player.data.libraries.ListenStatsLibrary
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.StatsAlbumEntry
 import yos.music.player.data.libraries.StatsArtistEntry
@@ -82,18 +82,18 @@ private fun StatsContent(navController: NavController)
     YosWrapper {
         val selectedPeriod = selectedStatsPeriod()
 
-        val committedEvents = ListenStatsManager.statsEvents.value
+        val cacheVersion = ListenStatsManager.statsCacheVersion.intValue
         val liveEvents = ListenStatsManager.liveSessionEvents.value
-        val allEvents = remember(committedEvents, liveEvents) { committedEvents + liveEvents }
+        LaunchedEffect(cacheVersion) { ListenStatsManager.warmStatsCache() }
 
-        val periodEvents = remember(allEvents, selectedPeriod) {
-            ListenStatsLibrary.filterEventsForPeriod(allEvents, selectedPeriod)
+        val statsSnapshot = remember(cacheVersion, liveEvents, selectedPeriod) {
+            ListenStatsManager.snapshotForPeriod(selectedPeriod, liveEvents)
         }
 
-        val summary = remember(periodEvents) { ListenStatsLibrary.buildSummary(periodEvents) }
-        val artistEntries = remember(periodEvents) { ListenStatsLibrary.buildArtistEntries(periodEvents) }
-        val albumEntries = remember(periodEvents) { ListenStatsLibrary.buildAlbumEntries(periodEvents) }
-        val trackEntries = remember(periodEvents) { ListenStatsLibrary.buildTrackEntries(periodEvents) }
+        val summary = statsSnapshot.summary
+        val artistEntries = statsSnapshot.artistEntries
+        val albumEntries = statsSnapshot.albumEntries
+        val trackEntries = statsSnapshot.trackEntries
 
         Column(Modifier.fillMaxWidth()) {
             StatsPeriodPills(
@@ -106,7 +106,7 @@ private fun StatsContent(navController: NavController)
                 playCount = summary.playCount,
                 uniqueAlbumCount = summary.uniqueAlbumCount,
                 selectedPeriod = selectedPeriod,
-                hasData = periodEvents.isNotEmpty()
+                hasData = statsSnapshot.hasEvents
             )
 
             if (artistEntries.isNotEmpty())

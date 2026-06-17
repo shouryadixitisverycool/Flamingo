@@ -1,11 +1,17 @@
 package yos.music.player.code
 
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.tencent.mmkv.MMKV
+import java.util.EnumMap
 import yos.music.player.data.libraries.ListenStatsEvent
+import yos.music.player.data.libraries.ListenStatsLibrary
+import yos.music.player.data.libraries.StatsLibraryIndex
+import yos.music.player.data.libraries.StatsPeriod
+import yos.music.player.data.libraries.StatsPeriodSnapshot
 
 @Stable
 object ListenStatsManager
@@ -16,12 +22,18 @@ object ListenStatsManager
 
     val statsEvents = mutableStateOf<List<ListenStatsEvent>>(emptyList())
     val liveSessionEvents = mutableStateOf<List<ListenStatsEvent>>(emptyList())
+    val statsCacheVersion = mutableIntStateOf(0)
 
     private val gson by lazy { GsonBuilder().create() }
 
     private val mmkv by lazy { MMKV.mmkvWithID(MMKV_ID) }
 
     private val eventListType = object : TypeToken<List<ListenStatsEvent>>() {}.type
+
+    private val cacheLock = Any()
+    private val cachedPeriodSnapshots = EnumMap<StatsPeriod, StatsPeriodSnapshot>(StatsPeriod::class.java)
+    private var cachedStatsEvents: List<ListenStatsEvent>? = null
+    private var cachedLibraryIndex: StatsLibraryIndex? = null
 
     fun loadEvents()
     {
@@ -32,12 +44,14 @@ object ListenStatsManager
         {
             val mergedEvents = loadedEvents + pendingEvents
             statsEvents.value = mergedEvents
+            invalidateStatsCache()
             persistEvents(mergedEvents)
             mmkv.removeValueForKey(PENDING_KEY)
         }
         else
         {
             statsEvents.value = loadedEvents
+            invalidateStatsCache()
         }
     }
 
@@ -56,6 +70,7 @@ object ListenStatsManager
         val updatedEvents = statsEvents.value + newEvents
         statsEvents.value = updatedEvents
         liveSessionEvents.value = emptyList()
+        invalidateStatsCache()
         persistEvents(updatedEvents)
         mmkv.removeValueForKey(PENDING_KEY)
     }
@@ -79,6 +94,7 @@ object ListenStatsManager
     {
         statsEvents.value = emptyList()
         liveSessionEvents.value = emptyList()
+        invalidateStatsCache()
         mmkv.removeValueForKey(EVENTS_KEY)
         mmkv.removeValueForKey(PENDING_KEY)
     }
@@ -107,8 +123,81 @@ object ListenStatsManager
         }
 
         statsEvents.value = resultingEvents.sortedBy { it.timestampMs }
+        invalidateStatsCache()
         persistEvents(statsEvents.value)
         return importedEvents.size
+    }
+
+    fun warmStatsCache()
+    {
+        synchronized(cacheLock)
+        {
+            ensureStatsCacheSourceIsFresh()
+            val libraryIndex = cachedLibraryIndex()
+            for (period in StatsPeriod.entries)
+            {
+                if (!cachedPeriodSnapshots.containsKey(period))
+                {
+                    val periodEvents = ListenStatsLibrary.filterEventsForPeriod(statsEvents.value, period)
+                    cachedPeriodSnapshots[period] = ListenStatsLibrary.buildSnapshot(periodEvents, libraryIndex)
+                }
+            }
+        }
+    }
+
+    fun snapshotForPeriod(period: StatsPeriod, liveEvents: List<ListenStatsEvent>): StatsPeriodSnapshot
+    {
+        val cachedSnapshot = cachedSnapshotForPeriod(period)
+        if (liveEvents.isEmpty()) {return cachedSnapshot}
+
+        val livePeriodEvents = ListenStatsLibrary.filterEventsForPeriod(liveEvents, period)
+        if (livePeriodEvents.isEmpty()) {return cachedSnapshot}
+
+        val liveSnapshot = synchronized(cacheLock)
+        {
+            ListenStatsLibrary.buildSnapshot(livePeriodEvents, cachedLibraryIndex())
+        }
+        return ListenStatsLibrary.mergeSnapshots(cachedSnapshot, liveSnapshot)
+    }
+
+    private fun cachedSnapshotForPeriod(period: StatsPeriod): StatsPeriodSnapshot
+    {
+        synchronized(cacheLock)
+        {
+            ensureStatsCacheSourceIsFresh()
+            cachedPeriodSnapshots[period]?.let { return it }
+
+            val periodEvents = ListenStatsLibrary.filterEventsForPeriod(statsEvents.value, period)
+            val snapshot = ListenStatsLibrary.buildSnapshot(periodEvents, cachedLibraryIndex())
+            cachedPeriodSnapshots[period] = snapshot
+            return snapshot
+        }
+    }
+
+    private fun cachedLibraryIndex(): StatsLibraryIndex
+    {
+        cachedLibraryIndex?.let { return it }
+        val libraryIndex = ListenStatsLibrary.buildLibraryIndex()
+        cachedLibraryIndex = libraryIndex
+        return libraryIndex
+    }
+
+    private fun ensureStatsCacheSourceIsFresh()
+    {
+        if (cachedStatsEvents === statsEvents.value) {return}
+        cachedStatsEvents = statsEvents.value
+        cachedPeriodSnapshots.clear()
+    }
+
+    private fun invalidateStatsCache()
+    {
+        synchronized(cacheLock)
+        {
+            cachedStatsEvents = null
+            cachedLibraryIndex = null
+            cachedPeriodSnapshots.clear()
+            statsCacheVersion.intValue++
+        }
     }
 
     private fun persistEvents(allEvents: List<ListenStatsEvent>)
