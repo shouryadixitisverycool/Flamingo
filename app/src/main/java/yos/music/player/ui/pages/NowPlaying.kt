@@ -242,6 +242,10 @@ fun NowPlaying(
         val lrcEntries: MutableState<List<List<Pair<Float, String>>>> =
             MediaViewModelObject.lrcEntries
         val bitmap: MutableState<Uri?> = MediaViewModelObject.bitmap
+        val lyricLineEndTimes = MediaViewModelObject.lyricLineEndTimes
+        val lyricLineTransliterations = MediaViewModelObject.lyricLineTransliterations
+        val lyricLineSubtitles = MediaViewModelObject.lyricLineSubtitles
+        val isTtmlLyrics = MediaViewModelObject.isTtmlLyrics
 
         val thisMusicPlaying = remember("NowPlaying_thisMusicPlaying") {
             musicPlaying
@@ -339,8 +343,21 @@ fun NowPlaying(
                 }
             }
 
+            val lyricSecondaryTextAvailable = remember("NowPlaying_lyricSecondaryTextAvailable") {
+                derivedStateOf {
+                    if (isTtmlLyrics.value) {
+                        lyricLineTransliterations.any { !it.isNullOrBlank() } ||
+                                lyricLineSubtitles.any { !it.isNullOrBlank() }
+                    } else {
+                        lrcEntries.value.any { it.lastOrNull()?.second?.isNotBlank() == true }
+                    }
+                }
+            }
+
             val translationButtonEnabled = remember("NowPlaying_translationButtonEnabled") {
-                derivedStateOf { showControl.value && alphaAnim.value != 0f }
+                derivedStateOf {
+                    showControl.value && alphaAnim.value != 0f && lyricSecondaryTextAvailable.value
+                }
             }
 
             println("重组：主功能区")
@@ -361,6 +378,10 @@ fun NowPlaying(
 
                     Lyric(
                         lrcEntries = { lrcEntries.value },
+                        lineEndTimes = { lyricLineEndTimes },
+                        lineTransliterations = { lyricLineTransliterations },
+                        lineSubtitles = { lyricLineSubtitles },
+                        isTtmlLyrics = { isTtmlLyrics.value },
                         weightLambda = { showControl.value },
                         translationLambda = { translation.value },
                         onBackClick = {
@@ -632,6 +653,7 @@ fun NowPlaying(
                                                             Icon(
                                                                 painterResource(id = R.drawable.ic_nowplaying_translateon),
                                                                 contentDescription = null,
+                                                                tint = Color.Unspecified,
                                                                 modifier = Modifier
                                                                     .size(30.dp)
                                                             )
@@ -639,6 +661,7 @@ fun NowPlaying(
                                                             Icon(
                                                                 painterResource(id = R.drawable.ic_nowplaying_translate),
                                                                 contentDescription = null,
+                                                                tint = Color.Unspecified,
                                                                 modifier = Modifier
                                                                     .size(30.dp)
                                                             )
@@ -1086,6 +1109,10 @@ private fun LazyItemScope.SmallMusicListItem(music: YosMediaItem, itemClick: () 
 @Composable
 private fun Lyric(
     lrcEntries: () -> List<List<Pair<Float, String>>>,
+    lineEndTimes: () -> List<Float>,
+    lineTransliterations: () -> List<String?>,
+    lineSubtitles: () -> List<String?>,
+    isTtmlLyrics: () -> Boolean,
     weightLambda: () -> Boolean,
     translationLambda: () -> Boolean,
     mainViewModel: MainViewModel,
@@ -1106,10 +1133,13 @@ private fun Lyric(
 
             Spacer(modifier = Modifier.statusBarsHeight(110.dp))
 
-
             YosLyricView(
                 //mediaViewModel = mediaViewModel,
                 lrcEntriesLambda = lrcEntries,
+                lineEndTimesLambda = lineEndTimes,
+                lineTransliterationsLambda = lineTransliterations,
+                lineSubtitlesLambda = lineSubtitles,
+                isTtmlLyricsLambda = isTtmlLyrics,
                 liveTimeLambda = {
                     (mediaControl?.currentPosition ?: 0).toInt()
                 },

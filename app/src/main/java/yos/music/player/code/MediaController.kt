@@ -58,6 +58,8 @@ import yos.music.player.code.MediaController.mediaSession
 import yos.music.player.code.MediaController.musicPlaying
 import yos.music.player.code.MediaController.onServiceRunning
 import yos.music.player.code.utils.lrc.YosLrcFactory
+import yos.music.player.code.utils.lrc.YosParsedLyricData
+import yos.music.player.code.utils.lrc.YosTtmlFactory
 import yos.music.player.code.utils.player.FadeExo
 import yos.music.player.code.utils.player.FadeExo.fadePause
 import yos.music.player.code.utils.player.FadeExo.fadePlay
@@ -706,6 +708,126 @@ class YosPlaybackService : MediaSessionService() {
         }
     }
 
+    private fun loadParsedLyrics(localAudioPath: String?): YosParsedLyricData {
+        val embeddedLyrics = if (localAudioPath != null) {
+            AudioMetadataUtils.loadEmbeddedLyrics(localAudioPath)
+        } else {
+            null
+        }
+
+        if (!embeddedLyrics.isNullOrBlank() && YosTtmlFactory.isTtmlText(embeddedLyrics)) {
+            parseTtmlLyrics(embeddedLyrics, "embedded TTML")?.let { return it }
+        }
+
+        loadSidecarTtmlLyrics(localAudioPath)?.let { return it }
+
+        val lrcContent = if (!embeddedLyrics.isNullOrBlank() && !YosTtmlFactory.isTtmlText(embeddedLyrics)) {
+            embeddedLyrics
+        } else {
+            loadSidecarLrcLyrics(localAudioPath)
+        }
+
+        return if (lrcContent.isNullOrBlank()) {
+            emptyParsedLyrics()
+        } else {
+            parseLrcLyrics(lrcContent)
+        }
+    }
+
+    private fun loadSidecarTtmlLyrics(localAudioPath: String?): YosParsedLyricData? {
+        val sidecarBasePath = localAudioPath?.toSidecarBasePath() ?: return null
+        val sidecarPaths = listOf(
+            "$sidecarBasePath.ttml",
+            "$sidecarBasePath.xml"
+        )
+
+        sidecarPaths.forEach { sidecarPath ->
+            val sidecarContent = AudioMetadataUtils.loadTtmlFile(this, sidecarPath) ?: return@forEach
+            if (!YosTtmlFactory.isTtmlText(sidecarContent)) {
+                Log.d("FlamingoLyrics", "Ignoring non-TTML sidecar lyric file: $sidecarPath")
+                return@forEach
+            }
+            parseTtmlLyrics(sidecarContent, sidecarPath)?.let { return it }
+        }
+
+        return null
+    }
+
+    private fun loadSidecarLrcLyrics(localAudioPath: String?): String? {
+        val sidecarBasePath = localAudioPath?.toSidecarBasePath() ?: return null
+        val lrcPath = "$sidecarBasePath.lrc"
+        println("获取歌词元数据失败，将读取：$lrcPath")
+        Log.d("FlamingoLyrics", "Attempting sidecar LRC path: $lrcPath")
+        return AudioMetadataUtils.loadLrcFile(this, lrcPath)
+    }
+
+    private fun parseTtmlLyrics(ttmlContent: String, sourceLabel: String): YosParsedLyricData? {
+        val startTime = System.nanoTime()
+        val parsedLyrics = YosTtmlFactory().formatTtmlEntries(ttmlContent)
+        val elapsedMs = (System.nanoTime() - startTime) / 1_000_000f
+        if (parsedLyrics == null) {
+            Log.d("FlamingoLyrics", "Failed parsing TTML lyrics from $sourceLabel")
+        } else {
+            Log.d(
+                "FlamingoLyrics",
+                "Parsed TTML lyrics from $sourceLabel entries=${parsedLyrics.entries.size} elapsedMs=$elapsedMs"
+            )
+        }
+        return parsedLyrics
+    }
+
+    private fun parseLrcLyrics(lrcContent: String): YosParsedLyricData {
+        val entries = YosLrcFactory().formatLrcEntries(lrcContent)
+        val endTimes = entries.mapIndexed { index, line ->
+            entries.getOrNull(index + 1)?.firstOrNull()?.first
+                ?: line.lastOrNull()?.first
+                ?: line.firstOrNull()?.first
+                ?: 0f
+        }
+        val emptySecondaryText = List(entries.size) { null as String? }
+
+        return YosParsedLyricData(
+            entries = entries,
+            endTimes = endTimes,
+            otherSideForLines = MediaViewModelObject.otherSideForLines.toList(),
+            transliterations = emptySecondaryText,
+            subtitles = emptySecondaryText,
+            isTtml = false
+        )
+    }
+
+    private fun emptyParsedLyrics(): YosParsedLyricData {
+        return YosParsedLyricData(
+            entries = emptyList(),
+            endTimes = emptyList(),
+            otherSideForLines = emptyList(),
+            transliterations = emptyList(),
+            subtitles = emptyList(),
+            isTtml = false
+        )
+    }
+
+    private fun applyParsedLyrics(parsedLyrics: YosParsedLyricData) {
+        MediaViewModelObject.lrcEntries.value = parsedLyrics.entries
+        MediaViewModelObject.otherSideForLines.clear()
+        MediaViewModelObject.otherSideForLines.addAll(parsedLyrics.otherSideForLines)
+        MediaViewModelObject.updateLyricMetadata(
+            endTimes = parsedLyrics.endTimes,
+            transliterations = parsedLyrics.transliterations,
+            subtitles = parsedLyrics.subtitles,
+            ttmlLyrics = parsedLyrics.isTtml
+        )
+    }
+
+    private fun String.toSidecarBasePath(): String {
+        val extensionStartIndex = lastIndexOf('.')
+        return if (extensionStartIndex > 0) {
+            substring(0, extensionStartIndex)
+        } else {
+            this
+        }
+    }
+
     private var listenHistoryTracker: ListenHistoryTracker? = null
     private var listenStatsTracker: ListenStatsTracker? = null
 
@@ -767,11 +889,6 @@ class YosPlaybackService : MediaSessionService() {
 
                         if (tracks.isEmpty) return@runCatching
 
-                        val lrcEntries: MutableState<List<List<Pair<Float, String>>>> =
-                            MediaViewModelObject.lrcEntries
-                        var lrcContent: String? = null
-
-
                         val path = player.currentMediaItem?.uri
 
                         println("质量分析 内置实现获取")
@@ -801,24 +918,11 @@ class YosPlaybackService : MediaSessionService() {
                             "Track changed uri=$path resolvedPath=$thisPath mediaId=${player.currentMediaItem?.mediaId}"
                         )
 
-                        if (thisPath != null) {
-                            lrcContent = AudioMetadataUtils.loadEmbeddedLyrics(thisPath)
-                        }
-
-                        val finalLrcContent = if (lrcContent == null) {
-                            val lrcPath = "${thisPath?.substringBeforeLast(".")}.lrc"
-                            println("获取歌词元数据失败，将读取：$lrcPath")
-                            Log.d("FlamingoLyrics", "Attempting sidecar LRC path: $lrcPath")
-                            AudioMetadataUtils.loadLrcFile(this@YosPlaybackService, lrcPath) ?: ""
-                        } else {
-                            lrcContent
-                        }
-
-                        val lrcFactory = YosLrcFactory()
-                        lrcEntries.value = lrcFactory.formatLrcEntries(finalLrcContent)
+                        val parsedLyrics = loadParsedLyrics(thisPath)
+                        applyParsedLyrics(parsedLyrics)
                         Log.d(
                             "FlamingoLyrics",
-                            "Loaded lyric content length=${finalLrcContent.length} parsedEntries=${lrcEntries.value.size} otherSideCount=${MediaViewModelObject.otherSideForLines.size}"
+                            "Loaded lyrics parsedEntries=${parsedLyrics.entries.size} isTtml=${parsedLyrics.isTtml} otherSideCount=${MediaViewModelObject.otherSideForLines.size}"
                         )
 
                         if (thisPath != null) {

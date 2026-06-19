@@ -17,16 +17,24 @@ object AudioMetadataUtils {
     private const val tag = "FlamingoLyrics"
 
     fun loadLrcFile(context: Context, filePath: String): String? {
+        return loadLyricFile(filePath, "LRC")
+    }
+
+    fun loadTtmlFile(context: Context, filePath: String): String? {
+        return loadLyricFile(filePath, "TTML")
+    }
+
+    private fun loadLyricFile(filePath: String, formatLabel: String): String? {
         return try {
             val file = File(filePath)
             if (!file.exists()) {
-                Log.w(tag, "LRC file missing: $filePath")
+                Log.w(tag, "$formatLabel file missing: $filePath")
                 return null
             }
-            Log.d(tag, "Reading LRC file: $filePath")
+            Log.d(tag, "Reading $formatLabel file: $filePath")
             file.readText(Charset.defaultCharset())
         } catch (e: Exception) {
-            Log.e(tag, "Failed reading LRC file: $filePath", e)
+            Log.e(tag, "Failed reading $formatLabel file: $filePath", e)
             e.printStackTrace()
             null
         }
