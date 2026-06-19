@@ -108,8 +108,6 @@ private fun LazyItemScope.FolderItem(folder: Folder, itemClick: () -> Unit) {
             .padding(start = 22.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        println("重组：文件夹列表 ${folder.name}")
-
         val shape = YosRoundedCornerShape(4.dp)
         val density = LocalDensity.current
 

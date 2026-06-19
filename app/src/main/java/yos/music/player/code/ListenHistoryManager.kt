@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.tencent.mmkv.MMKV
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import yos.music.player.UriTypeAdapter
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.YosMediaItem
@@ -25,13 +27,15 @@ object ListenHistoryManager
 
     private val mmkv by lazy { MMKV.mmkvWithID(MMKV_ID) }
 
-    fun loadHistory()
+    suspend fun loadHistory()
     {
-        val json = mmkv.decodeString(HISTORY_KEY) ?: return
-        val historyType = object : TypeToken<List<YosMediaItem>>() {}.type
-        val loadedHistory: List<YosMediaItem>? = runCatching {
-            gson.fromJson<List<YosMediaItem>>(json, historyType)
-        }.getOrNull()
+        val loadedHistory = withContext(Dispatchers.IO) {
+            val json = mmkv.decodeString(HISTORY_KEY) ?: return@withContext null
+            val historyType = object : TypeToken<List<YosMediaItem>>() {}.type
+            runCatching {
+                gson.fromJson<List<YosMediaItem>>(json, historyType)
+            }.getOrNull()
+        }
         if (loadedHistory != null) {recentlyPlayedSongs.value = loadedHistory}
     }
 

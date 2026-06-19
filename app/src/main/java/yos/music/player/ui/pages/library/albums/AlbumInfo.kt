@@ -425,7 +425,8 @@ fun AlbumInfo(
         } else {
             itemsIndexed(
                 displayedSongs.value,
-                key = { index, music -> "$index:${music.uri}" },
+                key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                contentType = { _, _ -> "AlbumInfo_song" },
             ) { index, music ->
                 val subtitle = remember(music, primaryArtists) {
                     if (primaryArtists.containsAll(music.artistsList ?: defaultArtists)) {
