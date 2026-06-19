@@ -66,8 +66,6 @@ fun YosFloatingLight(
         mutableStateOf<Drawable?>(null)
     }
 
-    println("封面：" + drawable.value)
-
     val context = LocalContext.current
     val imageLoader = ImageLoader(context)
     YosWrapper {
@@ -132,19 +130,16 @@ fun YosFloatingLight(
                         if (it.drawable != drawable.value) {
                             val thisOptionType = Option.Set.name
                             if (lastOption.value == thisOptionType) return@AndroidView
-                            println("流光：设置背景")
                             it.setImageDrawable(drawable.value!!)
                             lastOption.value = thisOptionType
                         } else if (!isPlaying() || !active) {
                             val thisOptionType = Option.Pause.name
                             if (lastOption.value == thisOptionType) return@AndroidView
-                            println("流光：暂停")
                             it.pause()
                             lastOption.value = thisOptionType
                         } else {
                             val thisOptionType = Option.Resume.name
                             if (lastOption.value == thisOptionType) return@AndroidView
-                            println("流光：恢复")
                             it.resume()
                             lastOption.value = thisOptionType
                         }

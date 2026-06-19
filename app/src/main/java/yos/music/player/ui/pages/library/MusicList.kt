@@ -228,8 +228,6 @@ private fun MusicListRow(
             .padding(horizontal = horizontalPadding, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        println("重组：歌曲列表 ${music.title}")
-
         when {
             showArtwork -> {
                 ShadowImageWithCache(

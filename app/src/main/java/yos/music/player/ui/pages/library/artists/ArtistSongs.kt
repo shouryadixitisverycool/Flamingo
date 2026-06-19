@@ -156,7 +156,8 @@ fun ArtistSongs(navController: NavController)
         } else {
             itemsIndexed(
                 displayedSongs.value,
-                key = { index, music -> "$index:${music.uri}" },
+                key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                contentType = { _, _ -> "ArtistSongs_song" },
             ) { index, music ->
                 ArtistSongItem(
                     music = music,

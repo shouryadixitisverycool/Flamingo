@@ -1,30 +1,6 @@
 # Lyric Formats Supported by Flamingo
 
-Last revised: August 1, 2025
-
-
-## TTML
-
-> TTML (Timed Text Markup Language) is an XML-based timed text markup language. It is designed for cross-subtitle and subtitle delivery applications worldwide, simplifying interoperability while maintaining consistency and compatibility with other subtitle file formats.
-
-> Its file extension is .ttml.
-
-
-### Parsing Support
-
-- Supports lyrics divided by lines and beats.
-- Supports the `ttm:agent` tag.
-- Supports the `ttm:role` tag, specifically `x-bg` (harmony) and `x-translation` (translation).
-- Notably, it also supports marking translations via the `<translations>` tag in the TTML file header.
-
-
-### Effect Support (Compared to Apple Music)
-
-- [x] Word-by-word ascent
-- [x] Duet
-- [x] Multi-line simultaneous singing
-- [x] Harmony (supports display above / below the main lyrics)
-- [x] Glow
+Last revised: June 19, 2026
 
 
 ## LRC
@@ -34,6 +10,8 @@ Last revised: August 1, 2025
 > Its file extension is .lrc.
 
 Over time, LRC has lacked standardized specifications from any organization, leading to various variants. Flamingo only supports the common types listed below.
+
+Flamingo loads LRC lyrics from embedded audio metadata or from a sidecar `.lrc` file with the same base name as the audio file. Embedded LRC lyrics must still use an LRC-compatible text format.
 
 
 ### Parsing Support
@@ -46,7 +24,7 @@ Over time, LRC has lacked standardized specifications from any organization, lea
 [Time]Another translation  
 ```  
 
-Supports marking translations via the same timeline and multiple translations.
+Supports marking translations via the same timeline. If multiple repeated lines exist, the last repeated line is used as the displayed translation.
 
 ```  
 [Time]Lyric 1  
@@ -67,16 +45,7 @@ Supports marking singers via prefixes like `v1: `.
 [Time]Lyrics  
 ```  
 
-Supports marking singers via `Singer: ` or `Singer: ` (with colon variations).
-
-```  
-[Time]Lyrics  
-[bg: [Time]Harmony lyrics ]  
-Note: Harmony formats other than this 
-      (e.g., [bg: Harmony lyrics ]) are not supported.  
-```  
-
-Supports marking harmony via `[bg: ]`; harmony supports translations.
+Supports marking singers with either an ASCII or full-width colon.
 
 
 #### Word-by-Word
@@ -86,7 +55,7 @@ Supports marking harmony via `[bg: ]`; harmony supports translations.
 [Time1]Lyric1<Time2>Lyric2<Time3>Lyric3<Time4>Lyric4<Time5>  
 ```  
 
-Supports word-by word-by-word timing via multiple `[]` or `<>` tags.
+Supports word-by-word timing via multiple `[]` or `<>` tags.
 
 ```  
 [Time1]v1: <Time1>Lyric1<Time2>Lyric2<Time3>  
@@ -101,16 +70,9 @@ Supports marking singers via prefixes like `v1: `.
                   translations will ultimately follow the main lyrics)  
 ```  
 
-Supports marking translations via the same timeline (translations do not support word-by-word timing).
+Supports marking translations via the same timeline. Translations do not support word-by-word timing.
 
-```  
-[Time1]Lyric1[Time2]Lyric2[Time3]  
-[bg: [Time1]Harmony lyric1[Time2]Harmony lyric2[Time3] ]  
-```  
-
-Supports marking harmony via `[bg: ]` (harmony supports word-by-word timing and translations).
-
-For word-by-word lyrics, Flamingo automatically detects and adds a countdown to the start of singing.
+For empty time-tag lines, Flamingo displays a countdown to the next lyric line when the gap is long enough.
 
 
 #### Time Tags
@@ -121,15 +83,117 @@ Flamingo supports the following time tag formats:
 [mm:ss]  
 [mm:ss.ff]  
 [mm:ss.fff]  
-[mm:ss:ff]  
-[mm:ss:fff]  
 ```  
 
-Note: "mm" and "ss" are for illustrative purposes only; actual support extends to any length of time tags.
+Note: `mm` can be any integer length. `ss` is parsed as a number, so decimal fractions after `.` are supported. Colon-separated frame formats such as `[mm:ss:ff]` are not supported.
+
+
+### Effect Support
+
+- [x] Word-by-word highlighting
+- [x] Word-by-word ascent
+- [x] Duet / alternating singer alignment via singer prefixes
+- [x] Translation display via repeated timestamps
+- [ ] LRC `[bg: ]` harmony parsing
+- [ ] Colon-separated frame time tags such as `[mm:ss:ff]`
+
+
+## TTML
+
+> TTML (Timed Text Markup Language) is an XML-based timed text markup language used for timed text and subtitles.
+
+> Flamingo supports embedded TTML lyrics and same-base-name sidecar `.ttml` or `.xml` files.
+
+If both TTML and LRC are available for the same track, Flamingo prefers TTML. If TTML parsing fails, Flamingo falls back to LRC when available.
+
+
+### Parsing Support
+
+#### Line-by-Line
+
+```xml
+<p begin="00:00:03.730" end="00:00:08.110">Lyrics</p>
+```
+
+Supports line-timed TTML using each `<p>` element's `begin` and `end` attributes.
+
+
+#### Word-by-Word
+
+```xml
+<p begin="1.000" end="2.000">
+  <span begin="1.000" end="1.500">Lyric</span>
+  <span begin="1.500" end="2.000">text</span>
+</p>
+```
+
+Supports word-by-word timing from child `<span>` elements. Word highlighting and ascent use the span timing.
+
+
+#### Subtitles And Transliterations
+
+```xml
+<p begin="7.372" end="10.915" itunes:key="L1">Lyrics</p>
+
+<translations>
+  <translation type="subtitle" xml:lang="en-US">
+    <text for="L1">Subtitle text</text>
+  </translation>
+</translations>
+
+<transliterations>
+  <transliteration xml:lang="ko-Latn">
+    <text for="L1">Transliteration text</text>
+  </transliteration>
+</transliterations>
+```
+
+Supports Apple Music-style subtitles and transliterations matched by `itunes:key` / `for` values.
+
+The lyrics page translate toggle controls TTML secondary text:
+
+- Toggle off: shows transliteration.
+- Toggle on: shows subtitle / translation.
+- If no secondary text exists, the toggle is disabled or hidden.
+
+
+#### Overlapping Lines
+
+TTML lines with overlapping time ranges are displayed at the same time. All active overlapping lines are focused together, and the lyrics view scrolls to keep the focused group centered. Each active line shows its own secondary text when available.
+
+
+#### Time Tags
+
+Flamingo supports the following TTML time formats:
+
+```xml
+begin="7.372"
+begin="1:07.372"
+begin="00:01:07.372"
+begin="7.372s"
+```
+
+
+#### Metadata
+
+Flamingo reads the lyric body, line timing, word timing, `ttm:agent`, subtitles, and transliterations. Other metadata such as song parts, songwriters, Composer groups, and Composer colors is ignored in the current version.
+
+
+### Effect Support
+
+- [x] Line-by-line timing
+- [x] Word-by-word highlighting
+- [x] Word-by-word ascent
+- [x] Simultaneous focused overlapping lines
+- [x] Subtitle / translation display
+- [x] Transliteration display
+- [x] Duet / alternating singer alignment via `ttm:agent="v2"`
+- [ ] Displaying song part labels such as Verse / Chorus
+- [ ] Composer group color rendering
 
 
 ## Other Notes
 
 #### Lyric Formatting
 
-To ensure clean and neat display, Flamingo's `YosLyricView` includes a built-in lyric formatting function. It performs operations on lyric text including but not limited to: **merging spaces, converting full-width / half-width symbols, and adding spacing between CJK characters and other languages**. This may result in slight visual differences between the displayed lyrics and the original file content, so please note this.
+To ensure clean and neat display, Flamingo's lyric parser includes a built-in lyric formatting function. It merges repeated spaces and trims leading spaces from lyric segments. This may result in slight visual differences between the displayed lyrics and the original file content, so please note this.

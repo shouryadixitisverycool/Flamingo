@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
 import yos.music.player.R
 import yos.music.player.code.ListenStatsManager
@@ -84,7 +85,9 @@ private fun StatsContent(navController: NavController)
 
         val cacheVersion = ListenStatsManager.statsCacheVersion.intValue
         val liveEvents = ListenStatsManager.liveSessionEvents.value
-        LaunchedEffect(cacheVersion) { ListenStatsManager.warmStatsCache() }
+        LaunchedEffect(cacheVersion) {
+            withContext(Dispatchers.Default) { ListenStatsManager.warmStatsCache() }
+        }
 
         val statsSnapshot = remember(cacheVersion, liveEvents, selectedPeriod) {
             ListenStatsManager.snapshotForPeriod(selectedPeriod, liveEvents)

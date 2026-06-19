@@ -134,7 +134,6 @@ fun YosLyricView(
     modifier: Modifier,
     onBackClick: () -> Unit
 ) {
-    println("重组：YosLyricView")
     val context = LocalContext.current
     val mainTextBasicColor = Color(uiConfig.mainTextBasicColor)
     val subTextBasicColor = Color(uiConfig.subTextBasicColor)
@@ -149,10 +148,6 @@ fun YosLyricView(
 
     //val thisLyricLines = MediaViewModelObject.mainLyricLines
     if (lrcEntries.isEmpty() || otherSideForLines.isEmpty() /*|| thisLyricLines.isEmpty()*/) {
-        println(
-            lrcEntries.isEmpty()
-                .toString() + otherSideForLines.isEmpty()/* + thisLyricLines.isEmpty()*/
-        )
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -950,8 +945,6 @@ fun LazyItemScope.LyricItem(
     liveTimeLambda: () -> Int,
     onClick: () -> Unit
 ) {
-    println("重组：歌词 $mainLyric")
-
     val viewAlign = if (otherSide) Alignment.End else Alignment.Start
 
     val focusedColor = Color(0xFFFFFFFF)
@@ -1249,7 +1242,6 @@ fun LazyItemScope.LyricItem(
                                             // 是否已播放完？
                                             if (showHighLight.value) {
                                                 // 高亮
-                                                println("高亮：$mainLyric")
                                                 return@Line onDrawWithContent {
                                                     drawText(
                                                         textLayoutResult = measureResult,

@@ -127,9 +127,12 @@ fun NormalMusic(navController: NavController) {
         // the detail page. For non-playlist views we keep the original
         // behaviour (read whatever was handed to us by the caller).
         val musicList = if (activePlayList != null) {
-            remember(activePlayList.songDataList, songs) {
+            val songsByUri = remember(songs) {
+                songs.associateBy { it.uri }
+            }
+            remember(activePlayList.songDataList, songsByUri) {
                 activePlayList.songDataList.mapNotNull { uri ->
-                    songs.firstOrNull { it.uri == uri }
+                    songsByUri[uri]
                 }
             }
         } else {
@@ -192,7 +195,7 @@ fun NormalMusic(navController: NavController) {
                         // Debounce typing — FR-S-08.
                         kotlinx.coroutines.delay(150)
                     }
-                    withContext(Dispatchers.Default) {
+                    val updatedList = withContext(Dispatchers.Default) {
                         val filteredList = if (useSearch.value) {
                             if (activePlayList != null) {
                                 PlayListSearch.matchAndRank(musicList, searchText.value)
@@ -213,7 +216,7 @@ fun NormalMusic(navController: NavController) {
                         } else {
                             musicList
                         }
-                        list.value = if (activePlayList != null) {
+                        if (activePlayList != null) {
                             // FR-S-07: relevance ranking overrides
                             // Sort By while a query is active.
                             if (useSearch.value) filteredList
@@ -222,6 +225,7 @@ fun NormalMusic(navController: NavController) {
                             filteredList.sortX()
                         }
                     }
+                    list.value = updatedList
                 }
             }
 
@@ -491,7 +495,8 @@ fun NormalMusic(navController: NavController) {
                         } else {
                             itemsIndexed(
                                 list.value,
-                                key = { index, music -> "$index:${music.uri}" },
+                                key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                                contentType = { _, _ -> "MusicList_item" },
                             ) { index, music ->
                                 MusicList(
                                     music = music,
@@ -611,7 +616,8 @@ fun NormalMusic(navController: NavController) {
 
                         itemsIndexed(
                             list.value,
-                            key = { index, music -> "$index:${music.uri}" },
+                            key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                            contentType = { _, _ -> "MusicList_item" },
                         ) { index, music ->
                             MusicList(
                                 music = music,
@@ -813,7 +819,6 @@ fun FloatingMenu(
                             ) {
                                 SongSort =
                                     SettingsLibrary.SongSortEnum.MUSIC_TITLE.ordinal
-                                println("SongSort: $SongSort")
                             }
                             FloatingMenuItemDivider()
                             FloatingMenuItem(
@@ -822,7 +827,6 @@ fun FloatingMenu(
                             ) {
                                 SongSort =
                                     SettingsLibrary.SongSortEnum.ARTIST_NAME.ordinal
-                                println("SongSort: $SongSort")
                             }
                             FloatingMenuDivider()
                             FloatingMenuItem(
@@ -831,7 +835,6 @@ fun FloatingMenu(
                             ) {
                                 SongSort =
                                     SettingsLibrary.SongSortEnum.MODIFIED_DATE.ordinal
-                                println("SongSort: $SongSort")
                             }
                             FloatingMenuDivider()
                             FloatingMenuItem(
@@ -839,7 +842,6 @@ fun FloatingMenu(
                                 icon = Icons.Rounded.ArrowUpward
                             ) {
                                 EnableDescending = false
-                                println("SongSort: $EnableDescending")
                             }
                             FloatingMenuItemDivider()
                             FloatingMenuItem(
@@ -847,7 +849,6 @@ fun FloatingMenu(
                                 icon = Icons.Rounded.ArrowDownward
                             ) {
                                 EnableDescending = true
-                                println("SongSort: $EnableDescending")
                             }
                         }
                     }
