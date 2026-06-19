@@ -17,3 +17,4 @@ local.properties
 /app/release/
 /app/signing/
 AGENTS.md
+/.idea/misc.xml
