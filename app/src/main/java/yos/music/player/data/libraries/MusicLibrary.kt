@@ -59,6 +59,7 @@ data class Time(
 data class PlayListV1(
     val mainMusicList: List<YosMediaItem>? = null,
     val playingMusicList: List<YosMediaItem>? = null,
+    val nextInQueueMusicList: List<YosMediaItem>? = null,
     val historyMusicList: List<YosMediaItem>? = null,
     val musicPlaying: YosMediaItem? = null,
     val shuffleModeEnabled: Boolean = false,
@@ -458,6 +459,7 @@ object MusicLibrary {
                 PlayListV1(
                     mainMusicList = MediaController.mainMusicList,
                     playingMusicList = MediaController.playingMusicList.value ?: emptyList(),
+                    nextInQueueMusicList = MediaController.nextInQueueMusicList.value,
                     historyMusicList = MediaController.historyMusicList.value,
                     musicPlaying = MediaController.musicPlaying.value,
                     shuffleModeEnabled = MediaController.queueShuffleEnabled.value,

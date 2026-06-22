@@ -113,6 +113,7 @@ class YosBasicApplication : Application() {
                                 yos.music.player.code.MediaController.restoreQueueState(
                                     playListData.musicPlaying,
                                     playListData.playingMusicList ?: emptyList(),
+                                    playListData.nextInQueueMusicList ?: emptyList(),
                                     playListData.historyMusicList ?: emptyList(),
                                     playStatusData.position,
                                     playListData.shuffleModeEnabled,
