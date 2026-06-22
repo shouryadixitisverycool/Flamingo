@@ -2,7 +2,7 @@ package yos.music.player.ui.pages.library
 
 import android.widget.Toast
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -140,7 +140,11 @@ fun /*LazyItemScope.*/MusicList(
                     animate(
                         initialValue = animationStart,
                         targetValue = 0f,
-                        animationSpec = tween(durationMillis = 180),
+                        animationSpec = SpringSpec(
+                            dampingRatio = 0.72f,
+                            stiffness = 420f,
+                            visibilityThreshold = 0.5f,
+                        ),
                     ) { value, _ ->
                         swipeOffsetPx = value
                     }
