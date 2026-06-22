@@ -605,22 +605,40 @@ fun NowPlaying(
                                             musicPlayingLambda = { thisMusicPlaying.value }) {
                                             nowPageOnChanged(Album)
                                         }
-                                        YosWrapper {
-                                            PlayingList(
-                                                shuffleModeEnabledLambda = { shuffleModeEnabled.value },
-                                                shuffleModeOnChanged = { shuffleModeSet ->
-                                                    shuffleModeEnabled.value = shuffleModeSet
-                                                },
-                                                repeatModeLambda = { repeatMode.intValue },
-                                                repeatModeOnChanged = { repeatModeSet ->
-                                                    repeatMode.intValue = repeatModeSet
-                                                },
-                                                thisMusicPlayingLambda = { thisMusicPlaying.value }
-                                            )
-                                        }
                                     }
                                 }
                         }
+                    }
+                }
+            }
+
+            YosWrapper {
+                AnimatedVisibility(
+                    visible = nowPageLambda() == PlayingList,
+                    enter = fadeIn(tween(AnimDurationMillis)),
+                    exit = fadeOut(tween(AnimDurationMillis)),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(top = 22.dp)
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .clickable(enabled = false, onClick = {})
+                    ) {
+                        Spacer(modifier = Modifier.height(92.dp))
+                        PlayingList(
+                            shuffleModeEnabledLambda = { shuffleModeEnabled.value },
+                            shuffleModeOnChanged = { shuffleModeSet ->
+                                shuffleModeEnabled.value = shuffleModeSet
+                            },
+                            repeatModeLambda = { repeatMode.intValue },
+                            repeatModeOnChanged = { repeatModeSet ->
+                                repeatMode.intValue = repeatModeSet
+                            },
+                            thisMusicPlayingLambda = { thisMusicPlaying.value }
+                        )
                     }
                 }
             }
