@@ -203,9 +203,11 @@
     <string name="playlist_edit_cover_auto_cd">Auto cover</string>
     <string name="playlist_edit_drag_handle_cd">Drag to reorder</string>
     <string name="playlist_edit_remove_cd">Toggle remove</string>
-    <string name="playlist_play_next_toast_one">1 song added to Up Next</string>
-    <string name="playlist_play_next_toast_other">%d songs added to Up Next</string>
+    <string name="playlist_play_next_toast_one">已将 1 首歌添加到接下来播放</string>
+    <string name="playlist_play_next_toast_other">已将 %d 首歌添加到接下来播放</string>
     <string name="queue_added_toast">已添加到队列</string>
+    <string name="queue_next_in_queue">接下来播放</string>
+    <string name="queue_up_next">稍后播放</string>
     <string name="playlist_delete_undo_message">Deleted “%1$s”</string>
     <string name="playlist_delete_undo_action">Undo</string>
     <string name="playlist_pin_toast">Pinned “%1$s”</string>

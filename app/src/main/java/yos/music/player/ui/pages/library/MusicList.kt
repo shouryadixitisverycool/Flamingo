@@ -2,7 +2,7 @@ package yos.music.player.ui.pages.library
 
 import android.widget.Toast
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,11 +40,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import yos.music.player.R
@@ -105,6 +103,8 @@ fun /*LazyItemScope.*/MusicList(
     }
 
     val dragModifier = if (swipeEnabled) {
+        val queueSwipeAction = checkNotNull(onQueueSwipe)
+
         Modifier.draggable(
             orientation = Orientation.Horizontal,
             state = rememberDraggableState { delta ->
@@ -130,17 +130,25 @@ fun /*LazyItemScope.*/MusicList(
                 val shouldAddToQueue = triggerOffsetPx > 0f && swipeOffsetPx >= triggerOffsetPx
 
                 resetAnimationJob?.cancel()
-                resetAnimationJob = coroutineScope.launch {
-                    if (shouldAddToQueue && onQueueSwipe?.invoke() == true) {
-                        Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
-                    }
 
+                if (shouldAddToQueue) {
+                    Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
+                    coroutineScope.launch(Dispatchers.IO) {
+                        queueSwipeAction()
+                    }
+                }
+
+                resetAnimationJob = coroutineScope.launch {
                     val animationStart = swipeOffsetPx
 
                     animate(
                         initialValue = animationStart,
                         targetValue = 0f,
-                        animationSpec = tween(durationMillis = 180),
+                        animationSpec = SpringSpec(
+                            dampingRatio = 0.72f,
+                            stiffness = 420f,
+                            visibilityThreshold = 0.5f,
+                        ),
                     ) { value, _ ->
                         swipeOffsetPx = value
                     }
@@ -186,8 +194,8 @@ fun /*LazyItemScope.*/MusicList(
         MusicListRow(
             music = music,
             modifier = Modifier
-                .offset {
-                    IntOffset(swipeOffsetPx.roundToInt(), 0)
+                .graphicsLayer {
+                    translationX = swipeOffsetPx
                 }
                 .background(MaterialTheme.colorScheme.background)
                 .then(dragModifier),

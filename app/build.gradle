@@ -101,7 +101,8 @@ android {
 dependencies {
     implementation files(
         "libs/kenburnsview-1.0.7.aar",
-        "libs/libPhonograph-release.aar"
+        "libs/libPhonograph-release.aar",
+        "libs/lib-decoder-ffmpeg-release.aar"
     )
     implementation project(":overscroll_core")
 
@@ -111,6 +112,7 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.9.1'
 
     implementation "androidx.compose.foundation:foundation:1.7.0-beta07"
+    implementation 'sh.calvin.reorderable:reorderable:2.5.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.compose.runtime:runtime-livedata:1.0.0-beta01'
     testImplementation 'junit:junit:4.13.2'

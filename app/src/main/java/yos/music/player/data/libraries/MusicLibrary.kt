@@ -59,10 +59,12 @@ data class Time(
 data class PlayListV1(
     val mainMusicList: List<YosMediaItem>? = null,
     val playingMusicList: List<YosMediaItem>? = null,
+    val nextInQueueMusicList: List<YosMediaItem>? = null,
     val historyMusicList: List<YosMediaItem>? = null,
     val musicPlaying: YosMediaItem? = null,
     val shuffleModeEnabled: Boolean = false,
     val playingMusicUris: List<String>? = null,
+    val nextInQueueMusicUris: List<String>? = null,
     val historyMusicUris: List<String>? = null,
     val musicPlayingUri: String? = null,
 ) : Parcelable
@@ -475,6 +477,7 @@ object MusicLibrary {
             updatePlayList(
                 PlayListV1(
                     playingMusicUris = MediaController.playingMusicList.value.orEmpty().mapNotNull { it.uri?.toString() },
+                    nextInQueueMusicUris = MediaController.nextInQueueMusicList.value.mapNotNull { it.uri?.toString() },
                     historyMusicUris = MediaController.historyMusicList.value.mapNotNull { it.uri?.toString() },
                     musicPlayingUri = MediaController.musicPlaying.value?.uri?.toString(),
                     shuffleModeEnabled = MediaController.queueShuffleEnabled.value,
