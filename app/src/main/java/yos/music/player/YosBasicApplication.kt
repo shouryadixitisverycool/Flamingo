@@ -1,26 +1,14 @@
 package yos.music.player
 
 import android.app.Application
-import android.content.ComponentName
 import android.net.Uri
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
 import com.funny.data_saver.core.DataSaverConverter.registerTypeConverters
-import com.google.common.util.concurrent.MoreExecutors
 import com.google.gson.GsonBuilder
 import com.google.gson.TypeAdapter
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
 import com.tencent.mmkv.MMKV
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import yos.music.player.code.MediaController.mediaControl
-import yos.music.player.code.MediaController.musicPlaying
-import yos.music.player.code.MediaController.playingMusicList
-import yos.music.player.code.YosPlaybackService
 import yos.music.player.data.libraries.Folder
-import yos.music.player.data.libraries.MusicLibrary
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.libraries.YosStringWrapper
@@ -38,10 +26,6 @@ class YosBasicApplication : Application() {
 
         // 初始化 MMKV
         MMKV.initialize(this)
-
-        yos.music.player.code.ListenHistoryManager.loadHistory()
-
-        yos.music.player.code.ListenStatsManager.loadEvents()
 
         val gson =
             GsonBuilder()
@@ -83,68 +67,6 @@ class YosBasicApplication : Application() {
         registerTypeConverters(
             save = { bean -> gson.toJson(bean) },
             restore = { str -> gson.fromJson(str, YosStringWrapper::class.java) }
-        )
-
-        // 初始化媒体控制器
-        val sessionToken = SessionToken(this, ComponentName(this, YosPlaybackService::class.java))
-        val controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
-        controllerFuture.addListener(
-            {
-                mediaControl = controllerFuture.get()
-
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val playListData = MusicLibrary.loadPlayList()
-                        val playStatusData = MusicLibrary.loadPlayStatus()
-
-                        println("prepare 读取历史")
-                        if (playListData.mainMusicList != null) {
-                            println("prepare 准备调用")
-                            /*launch {
-                                runCatching {
-                                    // 无论设置与否，先还原
-                                    val thisMainMusicList = playListData.mainMusicList
-                                    mainMusicList.value = thisMainMusicList
-                                    println("prepare 恢复主歌单")
-                                }
-                            }*/
-
-                            if (playListData.musicPlaying != null) {
-                                yos.music.player.code.MediaController.restoreQueueState(
-                                    playListData.musicPlaying,
-                                    playListData.playingMusicList ?: emptyList(),
-                                    playListData.nextInQueueMusicList ?: emptyList(),
-                                    playListData.historyMusicList ?: emptyList(),
-                                    playStatusData.position,
-                                    playListData.shuffleModeEnabled,
-                                    playStatusData.repeatMode,
-                                    false
-                                )
-                            } else if (playStatusData.music != null) {
-                                yos.music.player.code.MediaController.prepare(
-                                    playStatusData.music,
-                                    playListData.playingMusicList!!,
-                                    playStatusData.position,
-                                    playStatusData.shuffleModeEnabled,
-                                    playStatusData.repeatMode,
-                                    false
-                                )
-                            }
-
-                            if (playListData.playingMusicList != null) {
-                                playingMusicList.value = playListData.playingMusicList
-                            }
-
-                            if (playListData.musicPlaying != null) {
-                                musicPlaying.value = playListData.musicPlaying
-                            }
-                        }
-                    } catch (e:Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            },
-            MoreExecutors.directExecutor()
         )
 
         super.onCreate()

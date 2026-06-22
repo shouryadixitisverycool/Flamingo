@@ -6,6 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.tencent.mmkv.MMKV
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.EnumMap
 import yos.music.player.data.libraries.ListenStatsEvent
 import yos.music.player.data.libraries.ListenStatsLibrary
@@ -35,18 +39,20 @@ object ListenStatsManager
     private var cachedStatsEvents: List<ListenStatsEvent>? = null
     private var cachedLibraryIndex: StatsLibraryIndex? = null
 
-    fun loadEvents()
+    suspend fun loadEvents()
     {
-        val loadedEvents: List<ListenStatsEvent> = decodeEventList(EVENTS_KEY)
-        val pendingEvents: List<ListenStatsEvent> = decodeEventList(PENDING_KEY)
+        val (loadedEvents, pendingEvents) = withContext(Dispatchers.IO)
+        {
+            decodeEventList(EVENTS_KEY) to decodeEventList(PENDING_KEY)
+        }
 
         if (pendingEvents.isNotEmpty())
         {
             val mergedEvents = loadedEvents + pendingEvents
             statsEvents.value = mergedEvents
             invalidateStatsCache()
-            persistEvents(mergedEvents)
-            mmkv.removeValueForKey(PENDING_KEY)
+            persistEventsAsync(mergedEvents)
+            CoroutineScope(Dispatchers.IO).launch { mmkv.removeValueForKey(PENDING_KEY) }
         }
         else
         {
@@ -71,8 +77,8 @@ object ListenStatsManager
         statsEvents.value = updatedEvents
         liveSessionEvents.value = emptyList()
         invalidateStatsCache()
-        persistEvents(updatedEvents)
-        mmkv.removeValueForKey(PENDING_KEY)
+        persistEventsAsync(updatedEvents)
+        CoroutineScope(Dispatchers.IO).launch { mmkv.removeValueForKey(PENDING_KEY) }
     }
 
     fun persistPendingEvents(pendingEvents: List<ListenStatsEvent>)
@@ -82,7 +88,7 @@ object ListenStatsManager
             mmkv.removeValueForKey(PENDING_KEY)
             return
         }
-        mmkv.encode(PENDING_KEY, gson.toJson(pendingEvents))
+        CoroutineScope(Dispatchers.IO).launch { mmkv.encode(PENDING_KEY, gson.toJson(pendingEvents)) }
     }
 
     fun clearPendingEvents()
@@ -203,5 +209,10 @@ object ListenStatsManager
     private fun persistEvents(allEvents: List<ListenStatsEvent>)
     {
         mmkv.encode(EVENTS_KEY, gson.toJson(allEvents))
+    }
+
+    private fun persistEventsAsync(allEvents: List<ListenStatsEvent>)
+    {
+        CoroutineScope(Dispatchers.IO).launch { persistEvents(allEvents) }
     }
 }

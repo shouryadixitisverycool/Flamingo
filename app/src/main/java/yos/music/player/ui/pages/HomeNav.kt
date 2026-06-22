@@ -61,7 +61,7 @@ fun HomeNav(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            beyondViewportPageCount = 3,
+            beyondViewportPageCount = 0,
             key = { page -> page },
             userScrollEnabled = false
         ) { page ->

@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.graphics.drawable.toDrawable
 import androidx.navigation.NavController
-import coil.ImageLoader
+import coil.imageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
@@ -53,6 +53,7 @@ import io.github.alexzhirkevich.cupertino.icons.outlined.PersonCropCircle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import yos.music.player.R
 import yos.music.player.code.MediaController
 import yos.music.player.code.utils.others.BitmapResolver
@@ -106,7 +107,7 @@ fun RecommendCard(imageViewModel: ImageViewModel) {
         YosWrapper {
             LaunchedEffect(showRecommend.value) {
                 if (randomMusicList.value.isNotEmpty()) return@LaunchedEffect
-                randomMusicList.value = musicList.shuffled().take(5)
+                randomMusicList.value = musicList.pickRandomSongs(5)
             }
         }
 
@@ -133,7 +134,7 @@ fun RecommendCard(imageViewModel: ImageViewModel) {
                 pageSize = PageSize.Fixed(278.dp),
                 contentPadding = PaddingValues(start = 20.dp, end = 136.dp),
                 key = { pageIndex -> "$pageIndex:${randomMusicList.value[pageIndex].uri}" },
-                beyondViewportPageCount = 5
+                beyondViewportPageCount = 1
             ) { page ->
                 val music = randomMusicList.value[page]
                 RecommendCardItem(music = music,
@@ -148,6 +149,15 @@ fun RecommendCard(imageViewModel: ImageViewModel) {
             }
         }
     }
+}
+
+private fun List<YosMediaItem>.pickRandomSongs(count: Int): List<YosMediaItem>
+{
+    if (size <= count) {return shuffled()}
+
+    val selectedIndexes = LinkedHashSet<Int>()
+    while (selectedIndexes.size < count) {selectedIndexes.add(indices.random())}
+    return selectedIndexes.map { this[it] }
 }
 
 sealed class RecentlyPlayedDisplayItem
@@ -243,7 +253,7 @@ fun RecentlyPlayedCard()
                     is RecentlyPlayedDisplayItem.AlbumGroup -> "$pageIndex:album:${displayItem.albumName}"
                 }
             },
-            beyondViewportPageCount = displayItems.size.coerceAtMost(10)
+            beyondViewportPageCount = 1
         ) { page ->
             when (val displayItem = displayItems[page])
             {
@@ -297,27 +307,26 @@ fun RecentlyPlayedAlbumCardItem(
     }
 
     val context = LocalContext.current
-    val imageLoader = ImageLoader(context)
+    val imageLoader = context.imageLoader
     YosWrapper {
-        LaunchedEffect(Unit) {
+        LaunchedEffect(albumGroup.artworkUri) {
             if (albumGroup.artworkUri == null) return@LaunchedEffect
 
             delay(200)
-            val request = ImageRequest.Builder(context)
-                .data(albumGroup.artworkUri)
-                .build()
-            val thisBitmap = imageLoader.execute(request).drawable?.toBitmap()?.run {
-                BitmapResolver.bitmapCompress(this, lowQuality = true)
-            }
+            drawable.value = withContext(Dispatchers.Default) {
+                val request = ImageRequest.Builder(context)
+                    .data(albumGroup.artworkUri)
+                    .build()
+                val thisBitmap = imageLoader.execute(request).drawable?.toBitmap()?.run {
+                    BitmapResolver.bitmapCompress(this, lowQuality = true)
+                }
 
-            if (thisBitmap != null)
-            {
-                drawable.value = imageResolve(
-                    thisBitmap
-                ).toDrawable(context.resources)
+                if (thisBitmap == null) {return@withContext null}
+
+                val resolvedDrawable = imageResolve(thisBitmap).toDrawable(context.resources)
                 thisBitmap.recycle()
+                resolvedDrawable
             }
-            imageLoader.shutdown()
         }
     }
 
@@ -425,26 +434,26 @@ fun RecommendCardItem(music: YosMediaItem, onClick: () -> Unit) =
         }
 
         val context = LocalContext.current
-        val imageLoader = ImageLoader(context)
+        val imageLoader = context.imageLoader
         YosWrapper {
-            LaunchedEffect(Unit) {
+            LaunchedEffect(music.thumb) {
                 if (music.thumb == null) return@LaunchedEffect
 
                 delay(200)
-                val request = ImageRequest.Builder(context)
-                    .data(music.thumb)
-                    .build()
-                val thisBitmap = imageLoader.execute(request).drawable?.toBitmap()?.run {
-                    BitmapResolver.bitmapCompress(this, lowQuality = true)
-                }
+                drawable.value = withContext(Dispatchers.Default) {
+                    val request = ImageRequest.Builder(context)
+                        .data(music.thumb)
+                        .build()
+                    val thisBitmap = imageLoader.execute(request).drawable?.toBitmap()?.run {
+                        BitmapResolver.bitmapCompress(this, lowQuality = true)
+                    }
 
-                if (thisBitmap != null) {
-                    drawable.value = imageResolve(
-                        thisBitmap
-                    ).toDrawable(context.resources)
+                    if (thisBitmap == null) {return@withContext null}
+
+                    val resolvedDrawable = imageResolve(thisBitmap).toDrawable(context.resources)
                     thisBitmap.recycle()
+                    resolvedDrawable
                 }
-                imageLoader.shutdown()
             }
         }
 

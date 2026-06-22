@@ -328,7 +328,8 @@ fun ArtistInfo(
 
         itemsIndexed(
             artistSongs.take(5),
-            key = { index, music -> "artist-song-$index:${music.uri}" },
+            key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+            contentType = { _, _ -> "ArtistInfo_song" },
         ) { index, music ->
             MusicList(
                 music = music,

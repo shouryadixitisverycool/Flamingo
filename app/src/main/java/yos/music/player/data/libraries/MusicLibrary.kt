@@ -63,6 +63,10 @@ data class PlayListV1(
     val historyMusicList: List<YosMediaItem>? = null,
     val musicPlaying: YosMediaItem? = null,
     val shuffleModeEnabled: Boolean = false,
+    val playingMusicUris: List<String>? = null,
+    val nextInQueueMusicUris: List<String>? = null,
+    val historyMusicUris: List<String>? = null,
+    val musicPlayingUri: String? = null,
 ) : Parcelable
 
 @Parcelize
@@ -123,6 +127,15 @@ object MusicLibrary {
     private const val playListKey = "yos_play_list_v1"
     private const val playStatusKey = "yos_player_play_status"
 
+    private val gson by lazy { GsonBuilder().registerTypeAdapter(Uri::class.java, UriTypeAdapter()).create() }
+    private val mmkv by lazy { MMKV.mmkvWithID(mmkvID) }
+
+    private var cachedSongSource: List<YosMediaItem>? = null
+    private var cachedHiddenSongs: List<YosMediaItem>? = null
+    private var cachedFolders: List<Folder>? = null
+    private var cachedHiddenFolders: List<YosStringWrapper>? = null
+    private var cachedVisibleSongs: List<YosMediaItem>? = null
+
     var hideSongs by mutableDataSaverListStateOf(
         dataSaverInterface = SongListSaver,
         key = "hide_songs",
@@ -159,10 +172,36 @@ object MusicLibrary {
     )
 
     val songs: List<YosMediaItem>
-        get() = songSaver
-            .filter { it !in hideSongs && it.uri !in folders.filter { thisFolders -> thisFolders.path in hideFolders }
-                .flatMap { thisFlatMap -> thisFlatMap.songs }
-                .map { thisMap -> thisMap.uri } }
+        get() {
+            if (
+                cachedSongSource === songSaver &&
+                cachedHiddenSongs === hideSongs &&
+                cachedFolders === folders &&
+                cachedHiddenFolders === hideFoldersSaver
+            ) {
+                cachedVisibleSongs?.let { return it }
+            }
+
+            val hiddenSongUris = hideSongs.mapNotNull { it.uri }.toSet()
+            val hiddenFolderPaths = hideFoldersSaver.map { it.value }.toSet()
+            val hiddenFolderSongUris = folders
+                .asSequence()
+                .filter { it.path in hiddenFolderPaths }
+                .flatMap { it.songs.asSequence() }
+                .mapNotNull { it.uri }
+                .toSet()
+
+            val visibleSongs = songSaver.filter { song ->
+                song.uri !in hiddenSongUris && song.uri !in hiddenFolderSongUris
+            }
+
+            cachedSongSource = songSaver
+            cachedHiddenSongs = hideSongs
+            cachedFolders = folders
+            cachedHiddenFolders = hideFoldersSaver
+            cachedVisibleSongs = visibleSongs
+            return visibleSongs
+        }
 
     val artists
         get() = songs/*.distinctBy { it.artist }.map { it.artist }*/.flatMap {
@@ -187,12 +226,10 @@ object MusicLibrary {
 
     fun updatePlayList(playListV1: PlayListV1) {
         updateData(playListKey, playListV1)
-        println("updatePlayList $playListV1")
     }
 
     fun loadPlayList(): PlayListV1 {
         val loadedData = loadData(playListKey) ?: PlayListV1(null, null)
-        println("loadPlayList $loadedData")
         return loadedData
     }
 
@@ -277,15 +314,11 @@ object MusicLibrary {
     }
 
     private inline fun <reified T> updateData(key: String, value: T) {
-        val gson = GsonBuilder().registerTypeAdapter(Uri::class.java, UriTypeAdapter()).create()
-        val mmkv = MMKV.mmkvWithID(mmkvID)
         val json = gson.toJson(value)
         mmkv.encode(key, json)
     }
 
     private inline fun <reified T> loadData(key: String): T? {
-        val gson = GsonBuilder().registerTypeAdapter(Uri::class.java, UriTypeAdapter()).create()
-        val mmkv = MMKV.mmkvWithID(mmkvID)
         val json = mmkv.decodeString(key)
         return json?.let {
             val type = object : TypeToken<T>() {}.type
@@ -322,21 +355,12 @@ object MusicLibrary {
     }*/
 
     private fun updateFolderVisibility(folder: Folder, hide: Boolean) {
-        println("文件夹 显示状态更改")
         if (hide) {
-            println("文件夹 将隐藏 $folder")
             if (folders.any { it.path == folder.path }) {
-                // folders = folders - folder
-                println("文件夹 匹配成功")
-                println("文件夹 已将 ${folder.path} 隐藏")
                 hideFoldersSaver = hideFoldersSaver.plus(YosStringWrapper(folder.path))
             }
         } else {
-            println("文件夹 将显示 $folder")
             if (hideFolders.any { it == folder.path }) {
-                // folders = folders + folder
-                println("文件夹 匹配成功")
-                println("文件夹 已将 ${folder.path} 显示")
                 hideFoldersSaver = hideFoldersSaver.minus(YosStringWrapper(folder.path))
             }
         }
@@ -423,15 +447,18 @@ object MusicLibrary {
             // 有层级结构的result.folderStructure.folderList[""].folderList
             // val folderList = result.folderStructure.folderList
 
-            songSaver = result.songList.fastMap {
+            val convertedSongs = result.songList.fastMap {
                 it.toYosMediaItem()
             }
+            val songsByUri = convertedSongs.associateBy { it.uri }
+
+            songSaver = convertedSongs
 
             result.shallowFolder.folderList.map {
                 val name = it.key
                 val path = it.value.songList.first().uri?.path?.substringBeforeLast("/")?:""
                 val songs = it.value.songList.fastMap { thisSong ->
-                    thisSong.toYosMediaItem()
+                    songsByUri[thisSong.uri] ?: thisSong.toYosMediaItem()
                 }
                 Folder(name, path, songs)
             }.let {
@@ -447,21 +474,12 @@ object MusicLibrary {
                 folder !in hideFolders
             }*/
 
-            println("基本扫描: ${result.songList}")
-            println("文件夹: $folders")
-            println("SongSaver: $songSaver")
-            println("Songs: $songs")
-
-            println("prepare 媒体库扫描完毕，尝试保存播放列表")
-            println("prepare 媒体库扫描完毕，保存播放列表")
-
             updatePlayList(
                 PlayListV1(
-                    mainMusicList = MediaController.mainMusicList,
-                    playingMusicList = MediaController.playingMusicList.value ?: emptyList(),
-                    nextInQueueMusicList = MediaController.nextInQueueMusicList.value,
-                    historyMusicList = MediaController.historyMusicList.value,
-                    musicPlaying = MediaController.musicPlaying.value,
+                    playingMusicUris = MediaController.playingMusicList.value.orEmpty().mapNotNull { it.uri?.toString() },
+                    nextInQueueMusicUris = MediaController.nextInQueueMusicList.value.mapNotNull { it.uri?.toString() },
+                    historyMusicUris = MediaController.historyMusicList.value.mapNotNull { it.uri?.toString() },
+                    musicPlayingUri = MediaController.musicPlaying.value?.uri?.toString(),
                     shuffleModeEnabled = MediaController.queueShuffleEnabled.value,
                 )
             )

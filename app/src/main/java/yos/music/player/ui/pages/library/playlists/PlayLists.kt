@@ -261,8 +261,6 @@ private fun LazyItemScope.PlayListItem(playList: PlayList, itemClick: () -> Unit
             .padding(start = 22.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        println("重组：播放列表 ${playList.name}")
-
         val shape = YosRoundedCornerShape(4.dp)
         val density = LocalDensity.current
 
@@ -334,8 +332,6 @@ private fun LazyItemScope.PlayListItem(playListType: PlayListType, title: String
             .padding(start = 22.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        println("重组：播放列表 ${playListType.name}")
-
         val shape = YosRoundedCornerShape(4.dp)
         val density = LocalDensity.current
 
@@ -592,4 +588,3 @@ private fun LazyItemScope.PinnedAwarePlayListItem(
         }
     }
 }
-

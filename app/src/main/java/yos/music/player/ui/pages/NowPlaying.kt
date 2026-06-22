@@ -335,8 +335,6 @@ fun NowPlaying(
             MainViewModelObject.nowPage
         }*/
 
-        println("重组：NowPlaying")
-
         // 触摸超时
         YosWrapper {
             LaunchedEffect(showControl.value, nowPageLambda(), lastClickTime.longValue) {
@@ -363,8 +361,6 @@ fun NowPlaying(
         isPlayingLambda = { isPlaying.value },
         nowPage = { nowPage.value }
     )*/
-            println("重组：背景")
-
             YosFloatingLight(
                 album = { bitmap.value },
                 isPlaying = isPlayingStatusLambda,
@@ -421,8 +417,6 @@ fun NowPlaying(
                 }
             }
 
-            println("重组：主功能区")
-
             // 歌词
             YosWrapper {
 
@@ -435,8 +429,6 @@ fun NowPlaying(
                             this.alpha = alphaAnim.value
                         }
                 ) {
-                    println("重组：YosLyricView 外层 3")
-
                     Lyric(
                         lrcEntries = { lrcEntries.value },
                         lineEndTimes = { lyricLineEndTimes },
@@ -656,8 +648,6 @@ fun NowPlaying(
                             .fillMaxHeight(0.437f)
                             .fillMaxWidth()
                     ) {
-                        println("重组：控制区域外部")
-
                         YosWrapper {
                             if (showControl.value) {
                                 Box(
@@ -1147,7 +1137,6 @@ private fun PlayingList(
                             item("blank_before") {
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
-
                             if (nextInQueue.isNotEmpty()) {
                                 item("next_in_queue_header") {
                                     QueueSectionHeader(stringResource(id = R.string.queue_next_in_queue))
@@ -1599,15 +1588,11 @@ private fun Lyric(
 
     val context = LocalContext.current
 
-    println("重组：YosLyricView 外层 2")
-
     Column(
         Modifier
             .fillMaxSize()
     ) {
         YosWrapper {
-            println("重组：YosLyricView 外层 1")
-
             Spacer(modifier = Modifier.statusBarsHeight(110.dp))
 
             YosLyricView(
@@ -2376,8 +2361,6 @@ private fun PlayerControl(
                 .padding(bottom = 15.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            println("重组：控制区域内部")
-
             YosWrapper {
                 // 启动作用
                 YosWrapper {
@@ -2411,7 +2394,7 @@ private fun PlayerControl(
                                 onWhile()
                             }
 
-                            delay(700)
+                            delay(1000)
                         }
                     }
                 }

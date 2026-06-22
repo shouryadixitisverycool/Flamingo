@@ -3,6 +3,8 @@ package yos.music.player.code
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -33,6 +35,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
+import androidx.media3.session.SessionToken
 import cn.lyric.getter.api.API
 import cn.lyric.getter.api.data.ExtraData
 import cn.lyric.getter.api.tools.Tools
@@ -43,6 +46,7 @@ import com.blankj.utilcode.util.ResourceUtils.getDrawable
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +81,9 @@ import yos.music.player.data.objects.MediaViewModelObject
 
 @Stable
 object MediaController {
+    @Volatile
+    private var controllerInitializationStarted = false
+
     @Stable
     val mainMusicList: List<YosMediaItem>
         get() = MusicLibrary.songs
@@ -105,108 +112,214 @@ object MediaController {
     @Stable
     var mediaSession: MediaSession? = null
 
+    private var statusBarLyricHandler: Handler? = null
+    private var checkHookStatusRunnable: Runnable? = null
+    private var updateLyricsRunnable: Runnable? = null
+
+    fun ensureInitialized(context: Context) {
+        if (mediaControl != null || controllerInitializationStarted) {
+            return
+        }
+
+        controllerInitializationStarted = true
+        val applicationContext = context.applicationContext
+        val sessionToken = SessionToken(applicationContext, ComponentName(applicationContext, YosPlaybackService::class.java))
+        val controllerFuture = androidx.media3.session.MediaController.Builder(applicationContext, sessionToken).buildAsync()
+
+        controllerFuture.addListener(
+            {
+                runCatching {
+                    mediaControl = controllerFuture.get()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        restoreSavedQueueState(play = false)
+                    }
+                }.onFailure {
+                    controllerInitializationStarted = false
+                }
+            },
+            MoreExecutors.directExecutor()
+        )
+    }
+
+    private suspend fun restoreSavedQueueState(play: Boolean) {
+        val playListData = MusicLibrary.loadPlayList()
+        val playStatusData = MusicLibrary.loadPlayStatus()
+        val songsByUri = MusicLibrary.songs.mapNotNull { song ->
+            song.uri?.toString()?.let { uri -> uri to song }
+        }.toMap()
+
+        val restoredMusic = playListData.musicPlayingUri
+            ?.let { songsByUri[it] }
+            ?: playListData.musicPlaying
+            ?: playStatusData.music
+
+        if (restoredMusic == null) {
+            return
+        }
+
+        val restoredPlayingMusicList = playListData.playingMusicUris
+            ?.mapNotNull { songsByUri[it] }
+            ?: playListData.playingMusicList
+            ?: emptyList()
+
+        val restoredNextInQueueMusicList = playListData.nextInQueueMusicUris
+            ?.mapNotNull { songsByUri[it] }
+            ?: playListData.nextInQueueMusicList
+            ?: emptyList()
+
+        val restoredHistoryMusicList = playListData.historyMusicUris
+            ?.mapNotNull { songsByUri[it] }
+            ?: playListData.historyMusicList
+            ?: emptyList()
+
+        restoreQueueState(
+            restoredMusic,
+            restoredPlayingMusicList,
+            restoredNextInQueueMusicList,
+            restoredHistoryMusicList,
+            playStatusData.position,
+            playListData.shuffleModeEnabled || playStatusData.shuffleModeEnabled,
+            playStatusData.repeatMode,
+            play
+        )
+    }
+
     fun onServiceRunning() {
-        val handler by lazy { Handler(Looper.getMainLooper()) }
+        val handler = Handler(Looper.getMainLooper())
         val lyricAPI by lazy { API() }
         var lastLyric = listOf<Pair<Float, String>>()
         val base64 = Tools.drawableToBase64(getDrawable(R.drawable.flamingo_icon_notification)!!)
         var statusBarLyricEnabled: Boolean
         var hooked = false
 
-        val checkHookStatusRunnable = object : Runnable {
+        statusBarLyricHandler?.let { existingHandler ->
+            checkHookStatusRunnable?.let { existingHandler.removeCallbacks(it) }
+            updateLyricsRunnable?.let { existingHandler.removeCallbacks(it) }
+        }
+
+        statusBarLyricHandler = handler
+
+        checkHookStatusRunnable = object : Runnable {
             override fun run() {
                 hooked = lyricAPI.hasEnable
                 SettingsLibrary.StatusBarLyricHooked = hooked
-                handler.postDelayed(this, 350)
+                handler.postDelayed(this, 1500)
             }
         }
 
-        val updateLyricsRunnable = object : Runnable {
+        updateLyricsRunnable = object : Runnable {
             override fun run() {
+                var nextDelay = 500L
                 runCatching {
                     var currentLyricIndex: Int
                     var isPlaying: Boolean?
                     var liveTime: Long
 
-                    handler.post {
-                        isPlaying = mediaControl?.isPlaying
+                    isPlaying = mediaControl?.isPlaying
 
-                        runCatching {
-                            currentLyricIndex = MainViewModelObject.syncLyricIndex.intValue
+                    runCatching {
+                        currentLyricIndex = MainViewModelObject.syncLyricIndex.intValue
 
-                            if (isPlaying == true) {
-                                liveTime = mediaControl?.currentPosition ?: 0
+                        if (isPlaying == true) {
+                            liveTime = mediaControl?.currentPosition ?: 0
 
-                                val lrcEntries = MediaViewModelObject.lrcEntries.value
+                            val lrcEntries = MediaViewModelObject.lrcEntries.value
 
-                                val nextIndex = lrcEntries.indexOfFirst { line ->
-                                    line.first().first >= liveTime
+                            val nextIndex = lrcEntries.nextLyricIndex(liveTime)
+
+                            val sendLyric = fun() {
+                                try {
+                                    MainViewModelObject.syncLyricIndex.intValue = currentLyricIndex
+                                    statusBarLyricEnabled = SettingsLibrary.StatusBarLyricEnabled
+
+
+                                    val line = lrcEntries[currentLyricIndex]
+                                    if (line == lastLyric) {
+                                        return
+                                    }
+
+                                    val lyric = StringBuffer("")
+                                    line.forEachIndexed { charIndex, char ->
+                                        if (charIndex >= line.size - 1) return@forEachIndexed
+                                        lyric.append(char.second)
+                                    }
+
+                                    val lyricResult = lyric.toString()
+
+                                    if (statusBarLyricEnabled && hooked) {
+                                        lyricAPI.sendLyric(
+                                            lyricResult,
+                                            extra = ExtraData().apply {
+                                                customIcon = true
+                                                base64Icon = base64
+                                            }
+                                        )
+                                    }
+
+                                    // YosPlaybackService().sendLyricTicker(lyricResult)
+
+                                    lastLyric = line
+                                } catch (_: Exception) {
                                 }
+                            }
 
-                                val sendLyric = fun() {
-                                    try {
-                                        MainViewModelObject.syncLyricIndex.intValue =
-                                            currentLyricIndex
-                                        statusBarLyricEnabled =
-                                            SettingsLibrary.StatusBarLyricEnabled
-
-
-                                        val line = lrcEntries[currentLyricIndex]
-                                        if (line == lastLyric) {
-                                            return
-                                        }
-
-                                        val lyric = StringBuffer("")
-                                        line.forEachIndexed { charIndex, char ->
-                                            if (charIndex >= line.size - 1) return@forEachIndexed
-                                            lyric.append(char.second)
-                                        }
-
-                                        val lyricResult = lyric.toString()
-
-                                        if (statusBarLyricEnabled && hooked) {
-                                            lyricAPI.sendLyric(
-                                                lyricResult,
-                                                extra = ExtraData().apply {
-                                                    customIcon = true
-                                                    base64Icon = base64
-                                                }
-                                            )
-                                        }
-
-                                        // YosPlaybackService().sendLyricTicker(lyricResult)
-
-                                        lastLyric = line
-                                    } catch (_: Exception) {
-                                    }
+                            if (nextIndex != -1) {
+                                if (nextIndex - 1 != currentLyricIndex) {
+                                    currentLyricIndex = nextIndex - 1
                                 }
-
-                                if (nextIndex != -1) {
-                                    if (nextIndex - 1 != currentLyricIndex) {
-                                        currentLyricIndex = nextIndex - 1
-                                    }
-                                    if (currentLyricIndex != -1) {
-                                        sendLyric()
-                                    }
-                                } else if (currentLyricIndex != lrcEntries.size - 1) {
-                                    currentLyricIndex = lrcEntries.size - 1
-                                    if (currentLyricIndex != -1) {
-                                        sendLyric()
-                                    }
+                                if (currentLyricIndex != -1) {
+                                    sendLyric()
                                 }
+                            } else if (currentLyricIndex != lrcEntries.size - 1) {
+                                currentLyricIndex = lrcEntries.size - 1
+                                if (currentLyricIndex != -1) {
+                                    sendLyric()
+                                }
+                            }
+
+                            val nextLyricTime = lrcEntries.getOrNull(currentLyricIndex + 1)?.firstOrNull()?.first?.toLong()
+                            if (nextLyricTime != null) {
+                                nextDelay = (nextLyricTime - liveTime).coerceIn(70L, 500L)
                             }
                         }
                     }
-
-                    handler.postDelayed(this, 70)
                 }
+
+                handler.postDelayed(this, nextDelay)
             }
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            handler.post(checkHookStatusRunnable)
-            handler.post(updateLyricsRunnable)
+        checkHookStatusRunnable?.let { handler.post(it) }
+        updateLyricsRunnable?.let { handler.post(it) }
+    }
+
+    private fun List<List<Pair<Float, String>>>.nextLyricIndex(liveTime: Long): Int {
+        var low = 0
+        var high = lastIndex
+        var result = -1
+
+        while (low <= high) {
+            val middle = (low + high) ushr 1
+            val lineTime = getOrNull(middle)?.firstOrNull()?.first ?: return -1
+            if (lineTime >= liveTime) {
+                result = middle
+                high = middle - 1
+            } else {
+                low = middle + 1
+            }
         }
+
+        return result
+    }
+
+    fun stopStatusBarLyricUpdater() {
+        statusBarLyricHandler?.let { handler ->
+            checkHookStatusRunnable?.let { handler.removeCallbacks(it) }
+            updateLyricsRunnable?.let { handler.removeCallbacks(it) }
+        }
+        statusBarLyricHandler = null
+        checkHookStatusRunnable = null
+        updateLyricsRunnable = null
     }
 
 
@@ -219,8 +332,6 @@ object MediaController {
         repeatMode: Int? = null,
         play: Boolean = true
     ) {
-        println("prepare $music")
-
         if (thisMusicList.isEmpty()) {
             return
         }
@@ -683,11 +794,10 @@ object MediaController {
     fun saveQueueState() {
         MusicLibrary.updatePlayList(
             PlayListV1(
-                mainMusicList = mainMusicList,
-                playingMusicList = playingMusicList.value,
-                nextInQueueMusicList = nextInQueueMusicList.value,
-                historyMusicList = historyMusicList.value,
-                musicPlaying = musicPlaying.value,
+                playingMusicUris = playingMusicList.value.orEmpty().mapNotNull { it.uri?.toString() },
+                nextInQueueMusicUris = nextInQueueMusicList.value.mapNotNull { it.uri?.toString() },
+                historyMusicUris = historyMusicList.value.mapNotNull { it.uri?.toString() },
+                musicPlayingUri = musicPlaying.value?.uri?.toString(),
                 shuffleModeEnabled = queueShuffleEnabled.value,
             )
         )
@@ -708,9 +818,7 @@ object MediaController {
         val scope = CoroutineScope(Dispatchers.IO + refreshJob!!)
 
         scope.launch {
-            println("prepare 刷新UI状态 $music")
             musicPlaying.value = music
-            println(musicPlaying.value)
         }
 
         scope.launch {
@@ -877,9 +985,7 @@ class YosPlaybackService : MediaSessionService() {
     }
 
     private fun saveData() {
-        println("持久化 尝试保存播放状态")
         if (musicPlaying.value != null && mediaControl != null) {
-            println("持久化 保存播放状态")
             MusicLibrary.updatePlayStatus(
                 PlayStatus(
                     musicPlaying.value,
@@ -967,7 +1073,6 @@ class YosPlaybackService : MediaSessionService() {
     private fun loadSidecarLrcLyrics(localAudioPath: String?): String? {
         val sidecarBasePath = localAudioPath?.toSidecarBasePath() ?: return null
         val lrcPath = "$sidecarBasePath.lrc"
-        println("获取歌词元数据失败，将读取：$lrcPath")
         Log.d("FlamingoLyrics", "Attempting sidecar LRC path: $lrcPath")
         return AudioMetadataUtils.loadLrcFile(this, lrcPath)
     }
@@ -1102,7 +1207,6 @@ class YosPlaybackService : MediaSessionService() {
 
                         val path = player.currentMediaItem?.uri
 
-                        println("质量分析 内置实现获取")
                         var samplingRate = 0
                         var bitrate = 0
                         var haveJOC = false
@@ -1154,7 +1258,6 @@ class YosPlaybackService : MediaSessionService() {
                         MediaViewModelObject.samplingRate.intValue = samplingRate
                         MediaViewModelObject.bitrate.intValue = bitrate
 
-                        println("质量分析 采样率：${MediaViewModelObject.samplingRate.intValue}，比特率：${MediaViewModelObject.bitrate.intValue}")
                     }.onFailure { throwable ->
                         Log.e("FlamingoLyrics", "onTracksChanged lyric processing failed", throwable)
                     }
@@ -1187,7 +1290,6 @@ class YosPlaybackService : MediaSessionService() {
                         SleepTimer.onMediaItemTransition(hasNext = hasNext)
                     }
 
-                    println("更新 $mediaItem")
                     super.onMediaItemTransition(mediaItem, reason)
                 }
 
@@ -1381,6 +1483,7 @@ class YosPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        yos.music.player.code.MediaController.stopStatusBarLyricUpdater()
         listenHistoryTracker?.stop()
         listenHistoryTracker = null
         listenStatsTracker?.stop()
