@@ -101,7 +101,8 @@ android {
 dependencies {
     implementation files(
         "libs/kenburnsview-1.0.7.aar",
-        "libs/libPhonograph-release.aar"
+        "libs/libPhonograph-release.aar",
+        "libs/lib-decoder-ffmpeg-release.aar"
     )
     implementation project(":overscroll_core")
 
