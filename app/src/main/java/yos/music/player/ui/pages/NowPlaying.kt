@@ -1245,8 +1245,17 @@ private fun QueueMusicListItem(
     var swipeOffsetPx by remember(music.uri, music.mediaId) {
         mutableFloatStateOf(0f)
     }
+    var deleteHeightPx by remember(music.uri, music.mediaId) {
+        mutableFloatStateOf(0f)
+    }
     var resetAnimationJob by remember(music.uri, music.mediaId) {
         mutableStateOf<Job?>(null)
+    }
+    var deleteAnimating by remember(music.uri, music.mediaId) {
+        mutableStateOf(false)
+    }
+    var deleteCollapsing by remember(music.uri, music.mediaId) {
+        mutableStateOf(false)
     }
 
     val swipeRightEnabled = onMoveToNextQueue != null
@@ -1266,12 +1275,15 @@ private fun QueueMusicListItem(
     val swipeRevealWidth = with(density) {
         absoluteSwipeOffsetPx.toDp()
     }
+    val deleteHeight = with(density) {
+        deleteHeightPx.coerceAtLeast(0f).toDp()
+    }
 
-    val swipeModifier = if (swipeRightEnabled || swipeLeftEnabled) {
+    val swipeModifier = if ((swipeRightEnabled || swipeLeftEnabled) && !deleteAnimating) {
         Modifier.draggable(
             orientation = Orientation.Horizontal,
             state = rememberDraggableState { delta ->
-                if (rowWidthPx <= 0f) {
+                if (rowWidthPx <= 0f || deleteAnimating) {
                     return@rememberDraggableState
                 }
 
@@ -1296,6 +1308,43 @@ private fun QueueMusicListItem(
 
                 resetAnimationJob?.cancel()
                 resetAnimationJob = coroutineScope.launch {
+                    if (shouldRemove && onRemove != null) {
+                        deleteAnimating = true
+                        deleteHeightPx = if (rowHeightPx > 0f) {
+                            rowHeightPx
+                        } else {
+                            with(density) { QueueRowHeight.toPx() }
+                        }
+
+                        animate(
+                            initialValue = swipeOffsetPx,
+                            targetValue = -rowWidthPx,
+                            animationSpec = tween(
+                                durationMillis = 110,
+                                easing = EaseOutQuart,
+                            ),
+                        ) { value, _ ->
+                            swipeOffsetPx = value
+                        }
+
+                        swipeOffsetPx = 0f
+                        deleteCollapsing = true
+
+                        animate(
+                            initialValue = deleteHeightPx,
+                            targetValue = 0f,
+                            animationSpec = tween(
+                                durationMillis = 170,
+                                easing = EaseOutQuart,
+                            ),
+                        ) { value, _ ->
+                            deleteHeightPx = value
+                        }
+
+                        onRemove.invoke()
+                        return@launch
+                    }
+
                     if (shouldMoveToNextQueue && onMoveToNextQueue?.invoke() == true) {
                         Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
                     }
@@ -1314,9 +1363,6 @@ private fun QueueMusicListItem(
                         swipeOffsetPx = value
                     }
 
-                    if (shouldRemove) {
-                        onRemove?.invoke()
-                    }
                 }
             },
         )
@@ -1327,14 +1373,32 @@ private fun QueueMusicListItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .zIndex(if (isDragging) 1f else 0f)
+            .zIndex(if (isDragging || deleteAnimating) 1f else 0f)
             .clipToBounds()
+            .then(if (deleteCollapsing) Modifier.height(deleteHeight) else Modifier)
             .onSizeChanged {
                 rowWidthPx = it.width.toFloat()
-                rowHeightPx = it.height.toFloat()
+                if (!deleteCollapsing) {
+                    rowHeightPx = it.height.toFloat()
+                }
             }
     ) {
-        if (swipeRightEnabled && swipeOffsetPx > 0f) {
+        if (deleteCollapsing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(deleteHeight)
+                    .background(Color(0xFFD32F2F)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_swipe_delete),
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+        } else if (swipeRightEnabled && swipeOffsetPx > 0f) {
             Box(
                 modifier = Modifier
                     .width(swipeRevealWidth)
@@ -1357,7 +1421,7 @@ private fun QueueMusicListItem(
             }
         }
 
-        if (swipeLeftEnabled && swipeOffsetPx < 0f) {
+        if (!deleteCollapsing && swipeLeftEnabled && swipeOffsetPx < 0f) {
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -1381,18 +1445,20 @@ private fun QueueMusicListItem(
             }
         }
 
-        SmallMusicListItem(
-            music = music,
-            reorderEnabled = reorderEnabled,
-            modifier = Modifier
-                .offset {
-                    IntOffset(swipeOffsetPx.roundToInt(), dragOffsetPx.roundToInt())
-                }
-                .then(swipeModifier),
-            onReorderDelta = onReorderDelta,
-            onReorderStopped = onReorderStopped,
-            itemClick = itemClick,
-        )
+        if (!deleteCollapsing) {
+            SmallMusicListItem(
+                music = music,
+                reorderEnabled = reorderEnabled,
+                modifier = Modifier
+                    .offset {
+                        IntOffset(swipeOffsetPx.roundToInt(), dragOffsetPx.roundToInt())
+                    }
+                    .then(swipeModifier),
+                onReorderDelta = onReorderDelta,
+                onReorderStopped = onReorderStopped,
+                itemClick = itemClick,
+            )
+        }
     }
 }
 
