@@ -58,7 +58,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -123,7 +122,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,7 +145,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 import yos.music.player.R
 import yos.music.player.code.MediaController
 import yos.music.player.code.MediaController.mediaControl
@@ -1457,9 +1454,8 @@ private fun QueueMusicListItem(
                 music = music,
                 reorderEnabled = reorderEnabled,
                 modifier = Modifier
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .offset {
-                        IntOffset(swipeOffsetPx.roundToInt(), 0)
+                    .graphicsLayer {
+                        translationX = swipeOffsetPx
                     }
                     .then(swipeModifier),
                 reorderHandleModifier = reorderHandleModifier,
