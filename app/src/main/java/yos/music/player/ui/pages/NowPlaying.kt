@@ -21,6 +21,8 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
@@ -208,6 +210,7 @@ object NowPlayingPage {
 }
 
 private const val AnimDurationMillis = 300
+private const val ShareAlbumKey = "album"
 private val QueueRowHeight = 64.dp
 private val QueueDraggingItemColor = Color(0xFF10272B)
 private val QueueDraggingItemShape = RoundedCornerShape(0.dp)
@@ -276,6 +279,7 @@ private val MaterialFadeOutTransitionSpec
     )
 */
 
+@ExperimentalSharedTransitionApi
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun NowPlaying(
@@ -477,29 +481,37 @@ fun NowPlaying(
 
             // 主 View
             YosWrapper {
-                Crossfade(
-                    targetState = nowPageLambda(),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(top = 22.dp)
-                ) {
-                    //println("nowPage: ${nowPageLambda()}")
-                    //println("nowPageIt: $it")
-                    when (it) {
-                        Album ->
-                            Column(
-                                Modifier
-                                    .fillMaxSize()
-                                    .clickable(enabled = false, onClick = {})
-                            ) {
-                                YosWrapper {
-                                    Column(Modifier.fillMaxHeight(0.595f)) {
-                                        Album(
-                                            modifier = Modifier,
-                                            albumUrl = { thisMusicPlaying.value?.thumb },
-                                            isPlaying = isPlayingStatusLambda
-                                        )
+                SharedTransitionLayout {
+                    Crossfade(
+                        targetState = nowPageLambda(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .padding(top = 22.dp)
+                    ) {
+                        //println("nowPage: ${nowPageLambda()}")
+                        //println("nowPageIt: $it")
+                        when (it) {
+                            Album ->
+                                Column(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .clickable(enabled = false, onClick = {})
+                                ) {
+                                    YosWrapper {
+                                        Column(Modifier.fillMaxHeight(0.595f)) {
+                                            val isVisible = nowPageLambda() == Album
+
+                                            Album(
+                                                modifier = Modifier.sharedElementWithCallerManagedVisibility(
+                                                    sharedContentState = rememberSharedContentState(
+                                                        key = ShareAlbumKey
+                                                    ),
+                                                    visible = isVisible
+                                                ),
+                                                albumUrl = { thisMusicPlaying.value?.thumb },
+                                                isPlaying = isPlayingStatusLambda
+                                            )
                                             AnimatedContent(
                                                 targetState = thisMusicPlaying.value,
                                                 transitionSpec = {
@@ -548,54 +560,67 @@ fun NowPlaying(
                                     }
                                 }
 
-                        Lyric ->
-                            Column(Modifier.fillMaxSize()) {
-                                YosWrapper {
-                                    PlayingBar(
-                                        modifier = Modifier,
-                                        navController = navController,
-                                        onMinimizeNowPlaying = onMinimizeNowPlaying,
-                                        albumUrlLambda = {
-                                            thisMusicPlaying.value?.thumb
-                                        },
-                                        musicPlayingLambda = { thisMusicPlaying.value }) {
-                                        nowPageOnChanged(Album)
-                                    }
-                                }
-                            }
-
-                        PlayingList ->
-                            YosWrapper {
-                                Column(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .clickable(enabled = false, onClick = {})
-                                ) {
-                                    PlayingBar(
-                                        modifier = Modifier,
-                                        navController = navController,
-                                        onMinimizeNowPlaying = onMinimizeNowPlaying,
-                                        albumUrlLambda = {
-                                            thisMusicPlaying.value?.thumb
-                                        },
-                                        musicPlayingLambda = { thisMusicPlaying.value }) {
-                                        nowPageOnChanged(Album)
-                                    }
+                            Lyric ->
+                                Column(Modifier.fillMaxSize()) {
                                     YosWrapper {
-                                        PlayingList(
-                                            shuffleModeEnabledLambda = { shuffleModeEnabled.value },
-                                            shuffleModeOnChanged = { shuffleModeSet ->
-                                                shuffleModeEnabled.value = shuffleModeSet
+                                        val isVisible = nowPageLambda() == Lyric
+                                        PlayingBar(
+                                            modifier = Modifier.sharedElementWithCallerManagedVisibility(
+                                                sharedContentState = rememberSharedContentState(
+                                                    key = ShareAlbumKey
+                                                ),
+                                                visible = isVisible
+                                            ),
+                                            navController = navController,
+                                            onMinimizeNowPlaying = onMinimizeNowPlaying,
+                                            albumUrlLambda = {
+                                                thisMusicPlaying.value?.thumb
                                             },
-                                            repeatModeLambda = { repeatMode.intValue },
-                                            repeatModeOnChanged = { repeatModeSet ->
-                                                repeatMode.intValue = repeatModeSet
-                                            },
-                                            thisMusicPlayingLambda = { thisMusicPlaying.value }
-                                        )
+                                            musicPlayingLambda = { thisMusicPlaying.value }) {
+                                            nowPageOnChanged(Album)
+                                        }
                                     }
                                 }
-                            }
+
+                            PlayingList ->
+                                YosWrapper {
+                                    Column(
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clickable(enabled = false, onClick = {})
+                                    ) {
+                                        val isVisible = nowPageLambda() == PlayingList
+                                        PlayingBar(
+                                            modifier = Modifier.sharedElementWithCallerManagedVisibility(
+                                                sharedContentState = rememberSharedContentState(
+                                                    key = ShareAlbumKey
+                                                ),
+                                                visible = isVisible
+                                            ),
+                                            navController = navController,
+                                            onMinimizeNowPlaying = onMinimizeNowPlaying,
+                                            albumUrlLambda = {
+                                                thisMusicPlaying.value?.thumb
+                                            },
+                                            musicPlayingLambda = { thisMusicPlaying.value }) {
+                                            nowPageOnChanged(Album)
+                                        }
+                                        YosWrapper {
+                                            PlayingList(
+                                                shuffleModeEnabledLambda = { shuffleModeEnabled.value },
+                                                shuffleModeOnChanged = { shuffleModeSet ->
+                                                    shuffleModeEnabled.value = shuffleModeSet
+                                                },
+                                                repeatModeLambda = { repeatMode.intValue },
+                                                repeatModeOnChanged = { repeatModeSet ->
+                                                    repeatMode.intValue = repeatModeSet
+                                                },
+                                                thisMusicPlayingLambda = { thisMusicPlaying.value }
+                                            )
+                                        }
+                                    }
+                                }
+                        }
                     }
                 }
             }
