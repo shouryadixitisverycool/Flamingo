@@ -15,7 +15,9 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -40,6 +42,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,11 +58,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -95,6 +100,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -107,7 +113,9 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -115,6 +123,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -133,9 +142,11 @@ import com.google.accompanist.insets.navigationBarsHeight
 import com.google.accompanist.insets.statusBarsHeight
 import com.google.accompanist.insets.statusBarsPadding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 import yos.music.player.R
 import yos.music.player.code.MediaController
 import yos.music.player.code.MediaController.mediaControl
@@ -199,6 +210,7 @@ object NowPlayingPage {
 
 private const val ShareAlbumKey = "album"
 private const val AnimDurationMillis = 300
+private val QueueRowHeight = 64.dp
 
 /*
 private val MaterialFadeInTransitionSpec
@@ -797,13 +809,82 @@ private fun PlayingList(
     thisMusicPlayingLambda: () -> YosMediaItem?
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
 
     Spacer(modifier = Modifier.height(12.dp))
 
     val musicList = remember("PlayingList_musicList") {
         playingMusicList
     }
+    val nextInQueueList = remember("PlayingList_nextInQueueList") {
+        MediaController.nextInQueueMusicList
+    }
     val scope = rememberCoroutineScope()
+    val rowHeightPx = with(density) {
+        QueueRowHeight.toPx()
+    }
+    var nextDraggingIndex by remember("PlayingList_nextDraggingIndex") {
+        mutableIntStateOf(-1)
+    }
+    var nextDragOffsetPx by remember("PlayingList_nextDragOffsetPx") {
+        mutableFloatStateOf(0f)
+    }
+    var upNextDraggingIndex by remember("PlayingList_upNextDraggingIndex") {
+        mutableIntStateOf(-1)
+    }
+    var upNextDragOffsetPx by remember("PlayingList_upNextDragOffsetPx") {
+        mutableFloatStateOf(0f)
+    }
+
+    fun resetNextDrag() {
+        nextDraggingIndex = -1
+        nextDragOffsetPx = 0f
+    }
+
+    fun resetUpNextDrag() {
+        upNextDraggingIndex = -1
+        upNextDragOffsetPx = 0f
+    }
+
+    fun finishNextDrag(itemCount: Int) {
+        val fromIndex = nextDraggingIndex
+
+        if (fromIndex !in 0 until itemCount) {
+            resetNextDrag()
+            return
+        }
+
+        val toIndex = (fromIndex + (nextDragOffsetPx / rowHeightPx).roundToInt())
+            .coerceIn(0, itemCount - 1)
+
+        if (toIndex != fromIndex) {
+            scope.launch(Dispatchers.IO) {
+                MediaController.moveNextInQueueItem(fromIndex, toIndex)
+            }
+        }
+
+        resetNextDrag()
+    }
+
+    fun finishUpNextDrag(itemCount: Int) {
+        val fromIndex = upNextDraggingIndex
+
+        if (fromIndex !in 0 until itemCount) {
+            resetUpNextDrag()
+            return
+        }
+
+        val toIndex = (fromIndex + (upNextDragOffsetPx / rowHeightPx).roundToInt())
+            .coerceIn(0, itemCount - 1)
+
+        if (toIndex != fromIndex) {
+            scope.launch(Dispatchers.IO) {
+                MediaController.moveUpNextItem(fromIndex, toIndex)
+            }
+        }
+
+        resetUpNextDrag()
+    }
 
     YosWrapper {
         Column(
@@ -813,7 +894,7 @@ private fun PlayingList(
         ) {
             val hide = remember("PlayingList_hide") {
                 derivedStateOf {
-                    musicList.value.isNullOrEmpty()
+                    nextInQueueList.value.isEmpty() && musicList.value.isNullOrEmpty()
                 }
             }
 
@@ -838,7 +919,7 @@ private fun PlayingList(
                     Text(
                         text = stringResource(
                             id = R.string.page_library_playlists_music_total,
-                            musicList.value?.size ?: 0
+                            nextInQueueList.value.size + (musicList.value?.size ?: 0)
                         ),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
@@ -1035,22 +1116,80 @@ private fun PlayingList(
                             item("blank_before") {
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
-                            itemsIndexed(
-                                musicList.value ?: emptyList(),
-                                key = { indexOfMusic, music -> "$indexOfMusic:${music.uri}" }/*,
-                                contentType = { _, _ -> "NowPlaying_item" }*/
-                            ) { _, music ->
-                                SmallMusicListItem(
-                                    music
-                                ) {
-                                    scope.launch(Dispatchers.IO) {
-                                        MediaController.prepare(
-                                            music,
-                                            musicList.value ?: emptyList()
-                                        )
+
+                            val nextInQueue = nextInQueueList.value
+                            val upNext = musicList.value ?: emptyList()
+
+                            if (nextInQueue.isNotEmpty()) {
+                                item("next_in_queue_header") {
+                                    QueueSectionHeader(stringResource(id = R.string.queue_next_in_queue))
+                                }
+
+                                itemsIndexed(
+                                    nextInQueue,
+                                    key = { indexOfMusic, music -> "next:$indexOfMusic:${music.uri}:${music.mediaId}" }
+                                ) { indexOfMusic, music ->
+                                    QueueMusicListItem(
+                                        music = music,
+                                        reorderEnabled = nextInQueue.size > 1,
+                                        dragOffsetPx = if (nextDraggingIndex == indexOfMusic) nextDragOffsetPx else 0f,
+                                        onMoveToNextQueue = null,
+                                        onRemove = {
+                                            MediaController.removeNextInQueueItem(indexOfMusic)
+                                        },
+                                        onReorderDelta = { delta ->
+                                            if (nextDraggingIndex == -1 || nextDraggingIndex == indexOfMusic) {
+                                                nextDraggingIndex = indexOfMusic
+                                                nextDragOffsetPx += delta
+                                            }
+                                        },
+                                        onReorderStopped = {
+                                            finishNextDrag(nextInQueue.size)
+                                        }
+                                    ) {
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.skipToNextInQueueItem(indexOfMusic)
+                                        }
                                     }
                                 }
                             }
+
+                            if (upNext.isNotEmpty()) {
+                                item("up_next_header") {
+                                    QueueSectionHeader(stringResource(id = R.string.queue_up_next))
+                                }
+
+                                itemsIndexed(
+                                    upNext,
+                                    key = { indexOfMusic, music -> "up:$indexOfMusic:${music.uri}:${music.mediaId}" }
+                                ) { indexOfMusic, music ->
+                                    QueueMusicListItem(
+                                        music = music,
+                                        reorderEnabled = upNext.size > 1,
+                                        dragOffsetPx = if (upNextDraggingIndex == indexOfMusic) upNextDragOffsetPx else 0f,
+                                        onMoveToNextQueue = {
+                                            MediaController.moveUpNextToNextQueue(indexOfMusic)
+                                        },
+                                        onRemove = {
+                                            MediaController.removeUpNextItem(indexOfMusic)
+                                        },
+                                        onReorderDelta = { delta ->
+                                            if (upNextDraggingIndex == -1 || upNextDraggingIndex == indexOfMusic) {
+                                                upNextDraggingIndex = indexOfMusic
+                                                upNextDragOffsetPx += delta
+                                            }
+                                        },
+                                        onReorderStopped = {
+                                            finishUpNextDrag(upNext.size)
+                                        }
+                                    ) {
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.skipToUpNextItem(indexOfMusic)
+                                        }
+                                    }
+                                }
+                            }
+
                             item("blank_after") {
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
@@ -1063,10 +1202,216 @@ private fun PlayingList(
 }
 
 @Composable
-private fun LazyItemScope.SmallMusicListItem(music: YosMediaItem, itemClick: () -> Unit) {
-    Row(
+private fun QueueSectionHeader(title: String) {
+    Text(
+        text = title,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Medium,
+        color = Color.White,
         modifier = Modifier
-            .height(64.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 30.dp)
+            .padding(top = 12.dp, bottom = 6.dp)
+            .overlayEffect()
+            .alpha(0.42f)
+    )
+}
+
+@Composable
+private fun QueueMusicListItem(
+    music: YosMediaItem,
+    reorderEnabled: Boolean,
+    dragOffsetPx: Float,
+    onMoveToNextQueue: (suspend () -> Boolean)?,
+    onRemove: (suspend () -> Boolean)?,
+    onReorderDelta: (Float) -> Unit,
+    onReorderStopped: () -> Unit,
+    itemClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
+    val addedToQueueToast = stringResource(id = R.string.queue_added_toast)
+    var rowWidthPx by remember(music.uri, music.mediaId) {
+        mutableFloatStateOf(0f)
+    }
+    var rowHeightPx by remember(music.uri, music.mediaId) {
+        mutableFloatStateOf(0f)
+    }
+    var swipeOffsetPx by remember(music.uri, music.mediaId) {
+        mutableFloatStateOf(0f)
+    }
+    var resetAnimationJob by remember(music.uri, music.mediaId) {
+        mutableStateOf<Job?>(null)
+    }
+
+    val swipeRightEnabled = onMoveToNextQueue != null
+    val swipeLeftEnabled = onRemove != null
+    val triggerOffsetPx = rowWidthPx * 0.20f
+    val minSwipeOffsetPx = if (swipeLeftEnabled) -rowWidthPx else 0f
+    val maxSwipeOffsetPx = if (swipeRightEnabled) rowWidthPx else 0f
+    val absoluteSwipeOffsetPx = if (swipeOffsetPx < 0f) -swipeOffsetPx else swipeOffsetPx
+    val swipeProgress = if (rowWidthPx > 0f) {
+        (absoluteSwipeOffsetPx / rowWidthPx).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val rowHeight = with(density) {
+        rowHeightPx.toDp()
+    }
+    val swipeRevealWidth = with(density) {
+        absoluteSwipeOffsetPx.toDp()
+    }
+
+    val swipeModifier = if (swipeRightEnabled || swipeLeftEnabled) {
+        Modifier.draggable(
+            orientation = Orientation.Horizontal,
+            state = rememberDraggableState { delta ->
+                if (rowWidthPx <= 0f) {
+                    return@rememberDraggableState
+                }
+
+                resetAnimationJob?.cancel()
+
+                val wasPastThreshold = absoluteSwipeOffsetPx >= triggerOffsetPx
+                swipeOffsetPx = (swipeOffsetPx + delta).coerceIn(minSwipeOffsetPx, maxSwipeOffsetPx)
+                val updatedAbsoluteSwipeOffsetPx = if (swipeOffsetPx < 0f) -swipeOffsetPx else swipeOffsetPx
+                val isPastThreshold = updatedAbsoluteSwipeOffsetPx >= triggerOffsetPx
+
+                if (wasPastThreshold != isPastThreshold) {
+                    if (isPastThreshold) {
+                        Vibrator.longClick(context)
+                    } else {
+                        Vibrator.click(context)
+                    }
+                }
+            },
+            onDragStopped = {
+                val shouldMoveToNextQueue = triggerOffsetPx > 0f && swipeOffsetPx >= triggerOffsetPx
+                val shouldRemove = triggerOffsetPx > 0f && swipeOffsetPx <= -triggerOffsetPx
+
+                resetAnimationJob?.cancel()
+                resetAnimationJob = coroutineScope.launch {
+                    if (shouldMoveToNextQueue && onMoveToNextQueue?.invoke() == true) {
+                        Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
+                    } else if (shouldRemove) {
+                        onRemove?.invoke()
+                    }
+
+                    val animationStart = swipeOffsetPx
+
+                    animate(
+                        initialValue = animationStart,
+                        targetValue = 0f,
+                        animationSpec = tween(durationMillis = 180),
+                    ) { value, _ ->
+                        swipeOffsetPx = value
+                    }
+                }
+            },
+        )
+    } else {
+        Modifier
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clipToBounds()
+            .onSizeChanged {
+                rowWidthPx = it.width.toFloat()
+                rowHeightPx = it.height.toFloat()
+            }
+    ) {
+        if (swipeRightEnabled && swipeOffsetPx > 0f) {
+            Box(
+                modifier = Modifier
+                    .width(swipeRevealWidth)
+                    .height(rowHeight)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_swipe_queue),
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .graphicsLayer {
+                            val iconScale = 0.82f + (swipeProgress * 0.18f)
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        },
+                )
+            }
+        }
+
+        if (swipeLeftEnabled && swipeOffsetPx < 0f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(swipeRevealWidth)
+                    .height(rowHeight)
+                    .background(Color(0xFFD32F2F)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_swipe_delete),
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .graphicsLayer {
+                            val iconScale = 0.82f + (swipeProgress * 0.18f)
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        },
+                )
+            }
+        }
+
+        SmallMusicListItem(
+            music = music,
+            reorderEnabled = reorderEnabled,
+            modifier = Modifier
+                .offset {
+                    IntOffset(swipeOffsetPx.roundToInt(), dragOffsetPx.roundToInt())
+                }
+                .background(MaterialTheme.colorScheme.background)
+                .then(swipeModifier),
+            onReorderDelta = onReorderDelta,
+            onReorderStopped = onReorderStopped,
+            itemClick = itemClick,
+        )
+    }
+}
+
+@Composable
+private fun SmallMusicListItem(
+    music: YosMediaItem,
+    reorderEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    onReorderDelta: (Float) -> Unit,
+    onReorderStopped: () -> Unit,
+    itemClick: () -> Unit,
+) {
+    val reorderModifier = if (reorderEnabled) {
+        Modifier.draggable(
+            orientation = Orientation.Vertical,
+            state = rememberDraggableState { delta ->
+                onReorderDelta(delta)
+            },
+            onDragStopped = {
+                onReorderStopped()
+            },
+        )
+    } else {
+        Modifier
+    }
+
+    Row(
+        modifier = modifier
+            .height(QueueRowHeight)
             .fillMaxWidth()
             .clickable {
                 itemClick()
@@ -1084,7 +1429,11 @@ private fun LazyItemScope.SmallMusicListItem(music: YosMediaItem, itemClick: () 
             imageQuality = ImageQuality.LOW
         )
 
-        Column(Modifier.padding(start = 14.dp)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(start = 14.dp, end = 12.dp)
+        ) {
             Text(
                 text = music.title ?: defaultTitle,
                 modifier = Modifier.padding(bottom = 1.dp),
@@ -1102,6 +1451,22 @@ private fun LazyItemScope.SmallMusicListItem(music: YosMediaItem, itemClick: () 
                 fontSize = 11.5.sp,
                 lineHeight = 11.5.sp,
             )
+        }
+
+        if (reorderEnabled) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .then(reorderModifier),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_queue_reorder),
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.34f),
+                    modifier = Modifier.size(30.dp),
+                )
+            }
         }
     }
 }
