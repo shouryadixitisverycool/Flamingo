@@ -1298,8 +1298,6 @@ private fun QueueMusicListItem(
                 resetAnimationJob = coroutineScope.launch {
                     if (shouldMoveToNextQueue && onMoveToNextQueue?.invoke() == true) {
                         Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
-                    } else if (shouldRemove) {
-                        onRemove?.invoke()
                     }
 
                     val animationStart = swipeOffsetPx
@@ -1307,9 +1305,17 @@ private fun QueueMusicListItem(
                     animate(
                         initialValue = animationStart,
                         targetValue = 0f,
-                        animationSpec = tween(durationMillis = 180),
+                        animationSpec = SpringSpec(
+                            dampingRatio = 0.72f,
+                            stiffness = 420f,
+                            visibilityThreshold = 0.5f,
+                        ),
                     ) { value, _ ->
                         swipeOffsetPx = value
+                    }
+
+                    if (shouldRemove) {
+                        onRemove?.invoke()
                     }
                 }
             },
