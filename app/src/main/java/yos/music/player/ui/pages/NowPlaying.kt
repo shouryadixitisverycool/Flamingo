@@ -1374,7 +1374,6 @@ private fun QueueMusicListItem(
         modifier = Modifier
             .fillMaxWidth()
             .zIndex(if (isDragging || deleteAnimating) 1f else 0f)
-            .clipToBounds()
             .then(if (deleteCollapsing) Modifier.height(deleteHeight) else Modifier)
             .onSizeChanged {
                 rowWidthPx = it.width.toFloat()
@@ -1450,6 +1449,7 @@ private fun QueueMusicListItem(
                 music = music,
                 reorderEnabled = reorderEnabled,
                 modifier = Modifier
+                    .zIndex(if (isDragging) 1f else 0f)
                     .offset {
                         IntOffset(swipeOffsetPx.roundToInt(), dragOffsetPx.roundToInt())
                     }
