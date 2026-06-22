@@ -128,6 +128,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastMap
+import androidx.compose.ui.zIndex
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -1132,6 +1133,7 @@ private fun PlayingList(
                                     QueueMusicListItem(
                                         music = music,
                                         reorderEnabled = nextInQueue.size > 1,
+                                        isDragging = nextDraggingIndex == indexOfMusic,
                                         dragOffsetPx = if (nextDraggingIndex == indexOfMusic) nextDragOffsetPx else 0f,
                                         onMoveToNextQueue = null,
                                         onRemove = {
@@ -1166,6 +1168,7 @@ private fun PlayingList(
                                     QueueMusicListItem(
                                         music = music,
                                         reorderEnabled = upNext.size > 1,
+                                        isDragging = upNextDraggingIndex == indexOfMusic,
                                         dragOffsetPx = if (upNextDraggingIndex == indexOfMusic) upNextDragOffsetPx else 0f,
                                         onMoveToNextQueue = {
                                             MediaController.moveUpNextToNextQueue(indexOfMusic)
@@ -1221,6 +1224,7 @@ private fun QueueSectionHeader(title: String) {
 private fun QueueMusicListItem(
     music: YosMediaItem,
     reorderEnabled: Boolean,
+    isDragging: Boolean,
     dragOffsetPx: Float,
     onMoveToNextQueue: (suspend () -> Boolean)?,
     onRemove: (suspend () -> Boolean)?,
@@ -1317,6 +1321,7 @@ private fun QueueMusicListItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .zIndex(if (isDragging) 1f else 0f)
             .clipToBounds()
             .onSizeChanged {
                 rowWidthPx = it.width.toFloat()
@@ -1377,7 +1382,6 @@ private fun QueueMusicListItem(
                 .offset {
                     IntOffset(swipeOffsetPx.roundToInt(), dragOffsetPx.roundToInt())
                 }
-                .background(MaterialTheme.colorScheme.background)
                 .then(swipeModifier),
             onReorderDelta = onReorderDelta,
             onReorderStopped = onReorderStopped,
