@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import yos.music.player.R
@@ -105,6 +106,8 @@ fun /*LazyItemScope.*/MusicList(
     }
 
     val dragModifier = if (swipeEnabled) {
+        val queueSwipeAction = checkNotNull(onQueueSwipe)
+
         Modifier.draggable(
             orientation = Orientation.Horizontal,
             state = rememberDraggableState { delta ->
@@ -130,11 +133,15 @@ fun /*LazyItemScope.*/MusicList(
                 val shouldAddToQueue = triggerOffsetPx > 0f && swipeOffsetPx >= triggerOffsetPx
 
                 resetAnimationJob?.cancel()
-                resetAnimationJob = coroutineScope.launch {
-                    if (shouldAddToQueue && onQueueSwipe?.invoke() == true) {
-                        Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
-                    }
 
+                if (shouldAddToQueue) {
+                    Toast.makeText(context, addedToQueueToast, Toast.LENGTH_SHORT).show()
+                    coroutineScope.launch(Dispatchers.IO) {
+                        queueSwipeAction()
+                    }
+                }
+
+                resetAnimationJob = coroutineScope.launch {
                     val animationStart = swipeOffsetPx
 
                     animate(
