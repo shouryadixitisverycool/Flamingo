@@ -1474,7 +1474,7 @@ private fun SmallMusicListItem(
                     painter = painterResource(id = R.drawable.ic_queue_reorder),
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.34f),
-                    modifier = Modifier.size(30.dp),
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
