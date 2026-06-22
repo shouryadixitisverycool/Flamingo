@@ -30,6 +30,7 @@ import androidx.compose.animation.core.EaseOutQuart
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.TweenSpec
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -211,6 +212,8 @@ object NowPlayingPage {
 private const val ShareAlbumKey = "album"
 private const val AnimDurationMillis = 300
 private val QueueRowHeight = 64.dp
+private val QueueDraggingItemColor = Color(0xFF10272B)
+private val QueueDraggingItemShape = RoundedCornerShape(0.dp)
 
 private data class QueueReorderTarget(
     val nextInQueue: Boolean,
@@ -1056,6 +1059,9 @@ private fun PlayingList(
                 )
                 val nextInQueue = nextInQueueList.value
                 val upNext = musicList.value ?: emptyList()
+                var draggingQueueItemKey by remember {
+                    mutableStateOf<String?>(null)
+                }
                 val reorderableState = rememberReorderableLazyListState(state) { from, to ->
                     val source = resolveQueueReorderTarget(
                         from.index,
@@ -1139,12 +1145,14 @@ private fun PlayingList(
                                         QueueMusicListItem(
                                             music = music,
                                             reorderEnabled = nextInQueue.size > 1,
-                                            isDragging = isDragging,
+                                            isDragging = isDragging || draggingQueueItemKey == itemKey,
                                             reorderHandleModifier = Modifier.draggableHandle(
                                                 onDragStarted = {
+                                                    draggingQueueItemKey = itemKey
                                                     Vibrator.longClick(context)
                                                 },
                                                 onDragStopped = {
+                                                    draggingQueueItemKey = null
                                                     Vibrator.click(context)
                                                 },
                                             ),
@@ -1176,12 +1184,14 @@ private fun PlayingList(
                                         QueueMusicListItem(
                                             music = music,
                                             reorderEnabled = upNext.size > 1,
-                                            isDragging = isDragging,
+                                            isDragging = isDragging || draggingQueueItemKey == itemKey,
                                             reorderHandleModifier = Modifier.draggableHandle(
                                                 onDragStarted = {
+                                                    draggingQueueItemKey = itemKey
                                                     Vibrator.longClick(context)
                                                 },
                                                 onDragStopped = {
+                                                    draggingQueueItemKey = null
                                                     Vibrator.click(context)
                                                 },
                                             ),
@@ -1453,6 +1463,7 @@ private fun QueueMusicListItem(
             SmallMusicListItem(
                 music = music,
                 reorderEnabled = reorderEnabled,
+                isDragging = isDragging,
                 modifier = Modifier
                     .graphicsLayer {
                         translationX = swipeOffsetPx
@@ -1469,67 +1480,86 @@ private fun QueueMusicListItem(
 private fun SmallMusicListItem(
     music: YosMediaItem,
     reorderEnabled: Boolean,
+    isDragging: Boolean,
     modifier: Modifier = Modifier,
     reorderHandleModifier: Modifier,
     itemClick: () -> Unit,
 ) {
-    Row(
+    val draggedItemBackground by animateColorAsState(
+        targetValue = if (isDragging) { QueueDraggingItemColor } else { Color.Transparent },
+        label = "QueueDraggedItemBackground",
+    )
+    val draggedItemElevation by animateDpAsState(
+        targetValue = if (isDragging) { 10.dp } else { 0.dp },
+        label = "QueueDraggedItemElevation",
+    )
+
+    Surface(
         modifier = modifier
             .height(QueueRowHeight)
-            .fillMaxWidth()
-            .clickable {
-                itemClick()
-            }
-            .padding(horizontal = 30.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxWidth(),
+        color = draggedItemBackground,
+        contentColor = Color.White,
+        shadowElevation = draggedItemElevation,
+        shape = QueueDraggingItemShape,
     ) {
-        println("重组：播放界面歌曲列表 ${music.title}")
-        ShadowImageWithCache(
-            dataLambda = { music.thumb },
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            cornerRadius = 4.dp,
-            shadowAlpha = 0f,
-            imageQuality = ImageQuality.LOW
-        )
-
-        Column(
-            Modifier
-                .weight(1f)
-                .padding(start = 14.dp, end = 12.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable {
+                    itemClick()
+                }
+                .padding(horizontal = 30.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = music.title ?: defaultTitle,
-                modifier = Modifier.padding(bottom = 1.dp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 16.sp,
-                lineHeight = 16.sp,
+            println("重组：播放界面歌曲列表 ${music.title}")
+            ShadowImageWithCache(
+                dataLambda = { music.thumb },
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                cornerRadius = 4.dp,
+                shadowAlpha = 0f,
+                imageQuality = ImageQuality.LOW
             )
 
-            Text(
-                text = music.artistsName ?: defaultArtistsName,
-                modifier = Modifier.alpha(0.5f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 11.5.sp,
-                lineHeight = 11.5.sp,
-            )
-        }
-
-        if (reorderEnabled) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .then(reorderHandleModifier),
-                contentAlignment = Alignment.Center
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(start = 14.dp, end = 12.dp)
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_queue_reorder),
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.34f),
-                    modifier = Modifier.size(24.dp),
+                Text(
+                    text = music.title ?: defaultTitle,
+                    modifier = Modifier.padding(bottom = 1.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 16.sp,
+                    lineHeight = 16.sp,
                 )
+
+                Text(
+                    text = music.artistsName ?: defaultArtistsName,
+                    modifier = Modifier.alpha(0.5f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 11.5.sp,
+                    lineHeight = 11.5.sp,
+                )
+            }
+
+            if (reorderEnabled) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .then(reorderHandleModifier),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_queue_reorder),
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.34f),
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         }
     }
