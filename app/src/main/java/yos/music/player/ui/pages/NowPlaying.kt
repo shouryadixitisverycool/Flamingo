@@ -200,6 +200,8 @@ import yos.music.player.ui.widgets.basic.ShadowImageWithCache
 import yos.music.player.ui.widgets.basic.YosWrapper
 import yos.music.player.ui.widgets.effects.ShadowType
 import yos.music.player.ui.widgets.effects.overlayEffect
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 
 @Stable
@@ -212,6 +214,52 @@ object NowPlayingPage {
 private const val ShareAlbumKey = "album"
 private const val AnimDurationMillis = 300
 private val QueueRowHeight = 64.dp
+
+private data class QueueReorderTarget(
+    val nextInQueue: Boolean,
+    val index: Int,
+)
+
+private fun resolveQueueReorderTarget(
+    lazyListIndex: Int,
+    nextInQueueSize: Int,
+    upNextSize: Int,
+): QueueReorderTarget? {
+    var cursor = 1
+
+    if (nextInQueueSize > 0) {
+        cursor += 1
+
+        if (lazyListIndex in cursor until cursor + nextInQueueSize) {
+            return QueueReorderTarget(true, lazyListIndex - cursor)
+        }
+
+        cursor += nextInQueueSize
+    }
+
+    if (upNextSize > 0) {
+        cursor += 1
+
+        if (lazyListIndex in cursor until cursor + upNextSize) {
+            return QueueReorderTarget(false, lazyListIndex - cursor)
+        }
+    }
+
+    return null
+}
+
+private fun queueItemKey(
+    sectionKey: String,
+    music: YosMediaItem,
+    index: Int,
+    sectionItems: List<YosMediaItem>,
+): String {
+    val duplicateOrdinal = sectionItems
+        .take(index + 1)
+        .count { it.uri == music.uri && it.mediaId == music.mediaId }
+
+    return "$sectionKey:${music.uri}:${music.mediaId}:$duplicateOrdinal"
+}
 
 /*
 private val MaterialFadeInTransitionSpec
@@ -810,7 +858,6 @@ private fun PlayingList(
     thisMusicPlayingLambda: () -> YosMediaItem?
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
 
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -821,71 +868,6 @@ private fun PlayingList(
         MediaController.nextInQueueMusicList
     }
     val scope = rememberCoroutineScope()
-    val rowHeightPx = with(density) {
-        QueueRowHeight.toPx()
-    }
-    var nextDraggingIndex by remember("PlayingList_nextDraggingIndex") {
-        mutableIntStateOf(-1)
-    }
-    var nextDragOffsetPx by remember("PlayingList_nextDragOffsetPx") {
-        mutableFloatStateOf(0f)
-    }
-    var upNextDraggingIndex by remember("PlayingList_upNextDraggingIndex") {
-        mutableIntStateOf(-1)
-    }
-    var upNextDragOffsetPx by remember("PlayingList_upNextDragOffsetPx") {
-        mutableFloatStateOf(0f)
-    }
-
-    fun resetNextDrag() {
-        nextDraggingIndex = -1
-        nextDragOffsetPx = 0f
-    }
-
-    fun resetUpNextDrag() {
-        upNextDraggingIndex = -1
-        upNextDragOffsetPx = 0f
-    }
-
-    fun finishNextDrag(itemCount: Int) {
-        val fromIndex = nextDraggingIndex
-
-        if (fromIndex !in 0 until itemCount) {
-            resetNextDrag()
-            return
-        }
-
-        val toIndex = (fromIndex + (nextDragOffsetPx / rowHeightPx).roundToInt())
-            .coerceIn(0, itemCount - 1)
-
-        if (toIndex != fromIndex) {
-            scope.launch(Dispatchers.IO) {
-                MediaController.moveNextInQueueItem(fromIndex, toIndex)
-            }
-        }
-
-        resetNextDrag()
-    }
-
-    fun finishUpNextDrag(itemCount: Int) {
-        val fromIndex = upNextDraggingIndex
-
-        if (fromIndex !in 0 until itemCount) {
-            resetUpNextDrag()
-            return
-        }
-
-        val toIndex = (fromIndex + (upNextDragOffsetPx / rowHeightPx).roundToInt())
-            .coerceIn(0, itemCount - 1)
-
-        if (toIndex != fromIndex) {
-            scope.launch(Dispatchers.IO) {
-                MediaController.moveUpNextItem(fromIndex, toIndex)
-            }
-        }
-
-        resetUpNextDrag()
-    }
 
     YosWrapper {
         Column(
@@ -1075,6 +1057,33 @@ private fun PlayingList(
                     initialFirstVisibleItemIndex = 0,
                     initialFirstVisibleItemScrollOffset = -15
                 )
+                val nextInQueue = nextInQueueList.value
+                val upNext = musicList.value ?: emptyList()
+                val reorderableState = rememberReorderableLazyListState(state) { from, to ->
+                    val source = resolveQueueReorderTarget(
+                        from.index,
+                        nextInQueue.size,
+                        upNext.size,
+                    ) ?: return@rememberReorderableLazyListState
+                    val destination = resolveQueueReorderTarget(
+                        to.index,
+                        nextInQueue.size,
+                        upNext.size,
+                    ) ?: return@rememberReorderableLazyListState
+
+                    if (source.nextInQueue != destination.nextInQueue || source.index == destination.index) {
+                        return@rememberReorderableLazyListState
+                    }
+
+                    Vibrator.click(context)
+                    scope.launch(Dispatchers.IO) {
+                        if (source.nextInQueue) {
+                            MediaController.moveNextInQueueItem(source.index, destination.index)
+                        } else {
+                            MediaController.moveUpNextItem(source.index, destination.index)
+                        }
+                    }
+                }
 
                 YosWrapper {
                     CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
@@ -1118,9 +1127,6 @@ private fun PlayingList(
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
 
-                            val nextInQueue = nextInQueueList.value
-                            val upNext = musicList.value ?: emptyList()
-
                             if (nextInQueue.isNotEmpty()) {
                                 item("next_in_queue_header") {
                                     QueueSectionHeader(stringResource(id = R.string.queue_next_in_queue))
@@ -1128,29 +1134,31 @@ private fun PlayingList(
 
                                 itemsIndexed(
                                     nextInQueue,
-                                    key = { indexOfMusic, music -> "next:$indexOfMusic:${music.uri}:${music.mediaId}" }
+                                    key = { indexOfMusic, music -> queueItemKey("next", music, indexOfMusic, nextInQueue) }
                                 ) { indexOfMusic, music ->
-                                    QueueMusicListItem(
-                                        music = music,
-                                        reorderEnabled = nextInQueue.size > 1,
-                                        isDragging = nextDraggingIndex == indexOfMusic,
-                                        dragOffsetPx = if (nextDraggingIndex == indexOfMusic) nextDragOffsetPx else 0f,
-                                        onMoveToNextQueue = null,
-                                        onRemove = {
-                                            MediaController.removeNextInQueueItem(indexOfMusic)
-                                        },
-                                        onReorderDelta = { delta ->
-                                            if (nextDraggingIndex == -1 || nextDraggingIndex == indexOfMusic) {
-                                                nextDraggingIndex = indexOfMusic
-                                                nextDragOffsetPx += delta
+                                    val itemKey = queueItemKey("next", music, indexOfMusic, nextInQueue)
+
+                                    ReorderableItem(reorderableState, key = itemKey) { isDragging ->
+                                        QueueMusicListItem(
+                                            music = music,
+                                            reorderEnabled = nextInQueue.size > 1,
+                                            isDragging = isDragging,
+                                            reorderHandleModifier = Modifier.draggableHandle(
+                                                onDragStarted = {
+                                                    Vibrator.longClick(context)
+                                                },
+                                                onDragStopped = {
+                                                    Vibrator.click(context)
+                                                },
+                                            ),
+                                            onMoveToNextQueue = null,
+                                            onRemove = {
+                                                MediaController.removeNextInQueueItem(indexOfMusic)
+                                            },
+                                        ) {
+                                            scope.launch(Dispatchers.IO) {
+                                                MediaController.skipToNextInQueueItem(indexOfMusic)
                                             }
-                                        },
-                                        onReorderStopped = {
-                                            finishNextDrag(nextInQueue.size)
-                                        }
-                                    ) {
-                                        scope.launch(Dispatchers.IO) {
-                                            MediaController.skipToNextInQueueItem(indexOfMusic)
                                         }
                                     }
                                 }
@@ -1163,31 +1171,33 @@ private fun PlayingList(
 
                                 itemsIndexed(
                                     upNext,
-                                    key = { indexOfMusic, music -> "up:$indexOfMusic:${music.uri}:${music.mediaId}" }
+                                    key = { indexOfMusic, music -> queueItemKey("up", music, indexOfMusic, upNext) }
                                 ) { indexOfMusic, music ->
-                                    QueueMusicListItem(
-                                        music = music,
-                                        reorderEnabled = upNext.size > 1,
-                                        isDragging = upNextDraggingIndex == indexOfMusic,
-                                        dragOffsetPx = if (upNextDraggingIndex == indexOfMusic) upNextDragOffsetPx else 0f,
-                                        onMoveToNextQueue = {
-                                            MediaController.moveUpNextToNextQueue(indexOfMusic)
-                                        },
-                                        onRemove = {
-                                            MediaController.removeUpNextItem(indexOfMusic)
-                                        },
-                                        onReorderDelta = { delta ->
-                                            if (upNextDraggingIndex == -1 || upNextDraggingIndex == indexOfMusic) {
-                                                upNextDraggingIndex = indexOfMusic
-                                                upNextDragOffsetPx += delta
+                                    val itemKey = queueItemKey("up", music, indexOfMusic, upNext)
+
+                                    ReorderableItem(reorderableState, key = itemKey) { isDragging ->
+                                        QueueMusicListItem(
+                                            music = music,
+                                            reorderEnabled = upNext.size > 1,
+                                            isDragging = isDragging,
+                                            reorderHandleModifier = Modifier.draggableHandle(
+                                                onDragStarted = {
+                                                    Vibrator.longClick(context)
+                                                },
+                                                onDragStopped = {
+                                                    Vibrator.click(context)
+                                                },
+                                            ),
+                                            onMoveToNextQueue = {
+                                                MediaController.moveUpNextToNextQueue(indexOfMusic)
+                                            },
+                                            onRemove = {
+                                                MediaController.removeUpNextItem(indexOfMusic)
+                                            },
+                                        ) {
+                                            scope.launch(Dispatchers.IO) {
+                                                MediaController.skipToUpNextItem(indexOfMusic)
                                             }
-                                        },
-                                        onReorderStopped = {
-                                            finishUpNextDrag(upNext.size)
-                                        }
-                                    ) {
-                                        scope.launch(Dispatchers.IO) {
-                                            MediaController.skipToUpNextItem(indexOfMusic)
                                         }
                                     }
                                 }
@@ -1225,11 +1235,9 @@ private fun QueueMusicListItem(
     music: YosMediaItem,
     reorderEnabled: Boolean,
     isDragging: Boolean,
-    dragOffsetPx: Float,
+    reorderHandleModifier: Modifier,
     onMoveToNextQueue: (suspend () -> Boolean)?,
     onRemove: (suspend () -> Boolean)?,
-    onReorderDelta: (Float) -> Unit,
-    onReorderStopped: () -> Unit,
     itemClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1451,11 +1459,10 @@ private fun QueueMusicListItem(
                 modifier = Modifier
                     .zIndex(if (isDragging) 1f else 0f)
                     .offset {
-                        IntOffset(swipeOffsetPx.roundToInt(), dragOffsetPx.roundToInt())
+                        IntOffset(swipeOffsetPx.roundToInt(), 0)
                     }
                     .then(swipeModifier),
-                onReorderDelta = onReorderDelta,
-                onReorderStopped = onReorderStopped,
+                reorderHandleModifier = reorderHandleModifier,
                 itemClick = itemClick,
             )
         }
@@ -1467,24 +1474,9 @@ private fun SmallMusicListItem(
     music: YosMediaItem,
     reorderEnabled: Boolean,
     modifier: Modifier = Modifier,
-    onReorderDelta: (Float) -> Unit,
-    onReorderStopped: () -> Unit,
+    reorderHandleModifier: Modifier,
     itemClick: () -> Unit,
 ) {
-    val reorderModifier = if (reorderEnabled) {
-        Modifier.draggable(
-            orientation = Orientation.Vertical,
-            state = rememberDraggableState { delta ->
-                onReorderDelta(delta)
-            },
-            onDragStopped = {
-                onReorderStopped()
-            },
-        )
-    } else {
-        Modifier
-    }
-
     Row(
         modifier = modifier
             .height(QueueRowHeight)
@@ -1533,7 +1525,7 @@ private fun SmallMusicListItem(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .then(reorderModifier),
+                    .then(reorderHandleModifier),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
