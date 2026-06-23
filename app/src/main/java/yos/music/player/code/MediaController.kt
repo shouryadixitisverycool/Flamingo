@@ -680,6 +680,34 @@ object MediaController {
         return true
     }
 
+    fun moveNextInQueueItemDuringDrag(fromIndex: Int, toIndex: Int): Boolean {
+        val currentNextInQueue = nextInQueueMusicList.value
+
+        if (fromIndex !in currentNextInQueue.indices || toIndex !in currentNextInQueue.indices) {
+            return false
+        }
+
+        val controller = mediaControl ?: return false
+        val currentQueue = orderedPlayingMusicList.value.takeIf { it.isNotEmpty() } ?: return false
+        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val fromQueueIndex = currentIndex + 1 + fromIndex
+        val toQueueIndex = currentIndex + 1 + toIndex
+
+        if (fromQueueIndex !in currentQueue.indices || toQueueIndex !in currentQueue.indices) {
+            return false
+        }
+
+        val updatedNextInQueue = currentNextInQueue.moved(fromIndex, toIndex)
+        val updatedQueue = currentQueue.moved(fromQueueIndex, toQueueIndex)
+
+        nextInQueueMusicList.value = updatedNextInQueue
+        orderedPlayingMusicList.value = updatedQueue
+        syncQueueState(updatedQueue, currentIndex, consumeNextInQueue = false)
+        controller.moveMediaItem(fromQueueIndex, toQueueIndex)
+
+        return true
+    }
+
     suspend fun moveUpNextItem(fromIndex: Int, toIndex: Int): Boolean {
         val currentUpNext = playingMusicList.value ?: emptyList()
 
@@ -704,6 +732,33 @@ object MediaController {
         orderedPlayingMusicList.value = updatedQueue
         syncQueueState(updatedQueue, currentIndex, consumeNextInQueue = false)
         saveQueueState()
+
+        return true
+    }
+
+    fun moveUpNextItemDuringDrag(fromIndex: Int, toIndex: Int): Boolean {
+        val currentUpNext = playingMusicList.value ?: emptyList()
+
+        if (fromIndex !in currentUpNext.indices || toIndex !in currentUpNext.indices) {
+            return false
+        }
+
+        val controller = mediaControl ?: return false
+        val currentQueue = orderedPlayingMusicList.value.takeIf { it.isNotEmpty() } ?: return false
+        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val upNextStartIndex = currentIndex + 1 + nextInQueueMusicList.value.size
+        val fromQueueIndex = upNextStartIndex + fromIndex
+        val toQueueIndex = upNextStartIndex + toIndex
+
+        if (fromQueueIndex !in currentQueue.indices || toQueueIndex !in currentQueue.indices) {
+            return false
+        }
+
+        val updatedQueue = currentQueue.moved(fromQueueIndex, toQueueIndex)
+
+        orderedPlayingMusicList.value = updatedQueue
+        syncQueueState(updatedQueue, currentIndex, consumeNextInQueue = false)
+        controller.moveMediaItem(fromQueueIndex, toQueueIndex)
 
         return true
     }

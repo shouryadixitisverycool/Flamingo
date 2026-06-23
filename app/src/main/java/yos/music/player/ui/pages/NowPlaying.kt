@@ -1085,12 +1085,10 @@ private fun PlayingList(
                     }
 
                     Vibrator.click(context)
-                    scope.launch(Dispatchers.IO) {
-                        if (source.nextInQueue) {
-                            MediaController.moveNextInQueueItem(source.index, destination.index)
-                        } else {
-                            MediaController.moveUpNextItem(source.index, destination.index)
-                        }
+                    if (source.nextInQueue) {
+                        MediaController.moveNextInQueueItemDuringDrag(source.index, destination.index)
+                    } else {
+                        MediaController.moveUpNextItemDuringDrag(source.index, destination.index)
                     }
                 }
 
@@ -1159,6 +1157,9 @@ private fun PlayingList(
                                                 onDragStopped = {
                                                     draggingQueueItemKey = null
                                                     Vibrator.click(context)
+                                                    scope.launch(Dispatchers.IO) {
+                                                        MediaController.saveQueueState()
+                                                    }
                                                 },
                                             ),
                                             onMoveToNextQueue = null,
@@ -1198,6 +1199,9 @@ private fun PlayingList(
                                                 onDragStopped = {
                                                     draggingQueueItemKey = null
                                                     Vibrator.click(context)
+                                                    scope.launch(Dispatchers.IO) {
+                                                        MediaController.saveQueueState()
+                                                    }
                                                 },
                                             ),
                                             onMoveToNextQueue = {
