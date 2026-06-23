@@ -1167,7 +1167,7 @@ class YosPlaybackService : MediaSessionService() {
                 .setExtensionRendererMode(
                     when (SettingsLibrary.Codec) {
                         "System" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-                        else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                        else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
                     }
                 )
         )
