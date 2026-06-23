@@ -212,7 +212,6 @@ object NowPlayingPage {
 private const val AnimDurationMillis = 300
 private const val ShareAlbumKey = "album"
 private val QueueRowHeight = 64.dp
-private val QueueDraggingItemColor = Color(0xFF10272B)
 private val QueueDraggingItemShape = RoundedCornerShape(0.dp)
 
 private data class QueueReorderTarget(
@@ -1492,7 +1491,7 @@ private fun SmallMusicListItem(
     itemClick: () -> Unit,
 ) {
     val draggedItemBackground by animateColorAsState(
-        targetValue = if (isDragging) { QueueDraggingItemColor } else { Color.Transparent },
+        targetValue = Color.Transparent,
         label = "QueueDraggedItemBackground",
     )
     val draggedItemElevation by animateDpAsState(
