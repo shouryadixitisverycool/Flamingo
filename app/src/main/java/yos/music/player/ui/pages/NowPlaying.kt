@@ -612,14 +612,13 @@ fun NowPlaying(
                     modifier = Modifier
                         .fillMaxSize()
                         .statusBarsPadding()
-                        .padding(top = 22.dp)
+                        .padding(top = 114.dp)
                 ) {
                     Column(
                         Modifier
                             .fillMaxSize()
                             .clickable(enabled = false, onClick = {})
                     ) {
-                        Spacer(modifier = Modifier.height(92.dp))
                         PlayingList(
                             shuffleModeEnabledLambda = { shuffleModeEnabled.value },
                             shuffleModeOnChanged = { shuffleModeSet ->
