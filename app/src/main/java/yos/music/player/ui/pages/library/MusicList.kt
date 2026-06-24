@@ -371,6 +371,9 @@ private fun SongContextMenu(
         },
         onGoToAlbum = {
             visibleState.value = false
+            if (navController.currentDestination?.route == UI.AlbumInfo &&
+                LibraryObject.getTargetAlbumName() == albumName) { return@SongContextMenuPopup }
+
             LibraryObject.setTargetAlbumName(albumName)
             navController.toUI(UI.AlbumInfo)
         },
