@@ -4,7 +4,7 @@ import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
@@ -26,8 +27,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,6 +57,8 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import yos.music.player.R
 import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.FavPlayListLibrary
@@ -73,6 +76,8 @@ import yos.music.player.ui.widgets.basic.Title
 import yos.music.player.ui.widgets.basic.TitleBarIcon
 import yos.music.player.ui.widgets.playlist.PlayListPickerSheet
 
+private const val FirstPlayListLazyListIndex = 3
+
 @Composable
 fun PlayLists(navController: NavController) {
     // PRD §5.4: pinned playlists float to the top in pinOrder asc;
@@ -81,15 +86,49 @@ fun PlayLists(navController: NavController) {
     val pinned = playLists.filter { it.isPinned }
         .sortedBy { it.pinOrder ?: Int.MAX_VALUE }
     val unpinned = playLists.filter { !it.isPinned }.sortedBy { it.name }
-    val orderedAll = pinned + unpinned
-
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val listState = rememberLazyListState()
+    val reorderActive = remember {
+        mutableStateOf(false)
+    }
+    val reorderOrder = remember {
+        mutableStateListOf<String>()
+    }
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        if (!reorderActive.value) { return@rememberReorderableLazyListState }
 
-    // PRD FR-P-08: long-press → drag-reorder pins. Held at the page
-    // scope so a Done tap (or back press) can commit / cancel.
-    val reorder = remember { PinReorderState() }
-    val rowHeightPx = with(LocalDensity.current) { 80.dp.toPx() }
+        val sourceIndex = resolvePinnedPlaylistReorderIndex(from.index, reorderOrder.size)
+            ?: return@rememberReorderableLazyListState
+        val destinationIndex = resolvePinnedPlaylistReorderIndex(to.index, reorderOrder.size)
+            ?: return@rememberReorderableLazyListState
+
+        if (sourceIndex == destinationIndex) { return@rememberReorderableLazyListState }
+
+        val movedId = reorderOrder.removeAt(sourceIndex)
+        reorderOrder.add(destinationIndex, movedId)
+        Vibrator.click(context)
+    }
+    val draggingPlayListId = remember {
+        mutableStateOf<String?>(null)
+    }
+    val visiblePinned = if (reorderActive.value) {
+        val pinnedById = pinned.associateBy { it.listID }
+        reorderOrder.mapNotNull { pinnedById[it] }
+    } else {
+        pinned
+    }
+    val visibleAll = visiblePinned + unpinned
+    val enterReorderMode = {
+        reorderOrder.clear()
+        reorderOrder.addAll(pinned.map { it.listID })
+        reorderActive.value = true
+    }
+    val exitReorderMode = {
+        reorderActive.value = false
+        reorderOrder.clear()
+        draggingPlayListId.value = null
+    }
 
     // FR-M-10: the delete-undo snackbar is hosted by MainActivity
     // ([UndoSnackbarHost]), not this page — see the rationale on
@@ -108,41 +147,33 @@ fun PlayLists(navController: NavController) {
         songToAdd = null,
     )
 
-    // Effective rendering order: while reorder mode is active, the
-    // pinned section follows the live working order from
-    // [PinReorderState] so the user sees their drag take effect
-    // immediately. Otherwise it follows the persisted pinOrder.
-    val effectiveOrder = remember(pinned, unpinned, reorder.active, reorder.workingOrder.toList()) {
-        if (reorder.active) {
-            val pinById = pinned.associateBy { it.listID }
-            val orderedPinned = reorder.workingOrder.mapNotNull { pinById[it] }
-            orderedPinned + unpinned
-        } else {
-            orderedAll
-        }
-    }
-
     Title(
             title = stringResource(id = R.string.page_library_playlists),
             onBack = {
-                if (reorder.active) reorder.cancel() else navController.popBackStack()
+                if (reorderActive.value) {
+                    exitReorderMode()
+                } else {
+                    navController.popBackStack()
+                }
             },
-            rightBarIcon = if (reorder.active) {
+            rightBarIcon = if (reorderActive.value) {
                 {
                     TitleBarIcon(
                         icon = Icons.Default.Check,
                         onBack = {
-                            PlayListLibrary.reorderPins(reorder.snapshot())
-                            reorder.cancel()
+                            PlayListLibrary.reorderPins(reorderOrder.toList())
+                            exitReorderMode()
                         },
                     )
                 }
             } else null,
+            listState = listState,
             content = {
                 item("AddList") {
                     val targetTitle = context.getString(R.string.page_library_playlists_add_title)
                     PlayListItem(playListType = PlayListType.Add, title = targetTitle) {
-                        if (!reorder.active) createPickerOpen.value = true
+                        if (reorderActive.value) { return@PlayListItem }
+                        createPickerOpen.value = true
                     }
                     PlayListDivider()
                 }
@@ -150,7 +181,7 @@ fun PlayLists(navController: NavController) {
                 item("FavList") {
                     val targetTitle = context.getString(R.string.page_library_playlists_fav_title)
                     PlayListItem(playListType = PlayListType.Favorite, title = targetTitle) {
-                        if (reorder.active) return@PlayListItem
+                        if (reorderActive.value) { return@PlayListItem }
                         scope.launch(Dispatchers.IO) {
                             val targetList = FavPlayListLibrary.favPlayList
                             LibraryObject.setTargetListWithTitle(targetTitle, targetList)
@@ -163,56 +194,70 @@ fun PlayLists(navController: NavController) {
                 }
 
                 itemsIndexed(
-                    effectiveOrder,
+                    visibleAll,
                     key = { _, p -> p.listID }
                 ) { index, playList ->
                     val isPinned = playList.isPinned
-                    val dimmed = reorder.active && !isPinned
-                    val draggingThis = reorder.draggingId == playList.listID
+                    val playlistClick: () -> Unit = playlistClick@{
+                        if (reorderActive.value) { return@playlistClick }
+                        scope.launch(Dispatchers.IO) {
+                            val targetTitle = playList.name
+                            val targetList = convertToSongList(playList.songDataList, songs)
+                            LibraryObject.setTargetListWithTitle(
+                                targetTitle,
+                                targetList,
+                                playListId = playList.listID,
+                            )
+                            withContext(Dispatchers.Main) {
+                                navController.toUI(UI.NormalMusic)
+                            }
+                        }
+                    }
 
-                    PinnedAwarePlayListItem(
-                        playList = playList,
-                        isPinned = isPinned,
-                        reorderActive = reorder.active,
-                        draggingThisRow = draggingThis,
-                        dragOffsetPx = if (draggingThis) reorder.dragOffset else 0f,
-                        dimmed = dimmed,
-                        onClick = {
-                            if (reorder.active) return@PinnedAwarePlayListItem
-                            scope.launch(Dispatchers.IO) {
-                                val targetTitle = playList.name
-                                val targetList = convertToSongList(playList.songDataList, songs)
-                                LibraryObject.setTargetListWithTitle(
-                                    targetTitle,
-                                    targetList,
-                                    playListId = playList.listID,
-                                )
-                                withContext(Dispatchers.Main) {
-                                    navController.toUI(UI.NormalMusic)
-                                }
-                            }
-                        },
-                        onLongPress = if (isPinned) {
-                            {
-                                if (!reorder.active) {
+                    if (isPinned && reorderActive.value) {
+                        ReorderableItem(reorderableState, key = playList.listID) { isDragging ->
+                            PinnedAwarePlayListItem(
+                                playList = playList,
+                                isPinned = true,
+                                reorderActive = true,
+                                reorderEnabled = reorderOrder.size > 1,
+                                draggingThisRow = isDragging || draggingPlayListId.value == playList.listID,
+                                dimmed = false,
+                                reorderHandleModifier = Modifier.draggableHandle(
+                                    onDragStarted = {
+                                        draggingPlayListId.value = playList.listID
+                                        Vibrator.longClick(context)
+                                    },
+                                    onDragStopped = {
+                                        draggingPlayListId.value = null
+                                        Vibrator.click(context)
+                                    },
+                                ),
+                                onLongPress = null,
+                                onClick = playlistClick,
+                            )
+                        }
+                    } else {
+                        PinnedAwarePlayListItem(
+                            playList = playList,
+                            isPinned = isPinned,
+                            reorderActive = reorderActive.value,
+                            reorderEnabled = false,
+                            draggingThisRow = false,
+                            dimmed = reorderActive.value && !isPinned,
+                            reorderHandleModifier = Modifier,
+                            onLongPress = if (isPinned && !reorderActive.value && pinned.size > 1) {
+                                {
                                     Vibrator.longClick(context)
-                                    reorder.enter(pinned.map { it.listID })
+                                    enterReorderMode()
                                 }
-                            }
-                        } else null,
-                        onDragStart = if (isPinned) {
-                            { reorder.startDrag(playList.listID) }
-                        } else null,
-                        onDrag = if (isPinned) {
-                            { delta -> reorder.updateDrag(delta, rowHeightPx) }
-                        } else null,
-                        onDragEnd = if (isPinned) {
-                            { reorder.endDrag() }
-                        } else null,
-                    )
+                            } else null,
+                            onClick = playlistClick,
+                        )
+                    }
 
                     key(index) {
-                        val needDivider = index < effectiveOrder.size - 1
+                        val needDivider = index < visibleAll.size - 1
                         if (needDivider) {
                             PlayListDivider()
                         }
@@ -220,6 +265,13 @@ fun PlayLists(navController: NavController) {
                 }
             }
         )
+}
+
+private fun resolvePinnedPlaylistReorderIndex(lazyListIndex: Int, pinnedCount: Int): Int? {
+    val playlistIndex = lazyListIndex - FirstPlayListLazyListIndex
+    if (playlistIndex !in 0 until pinnedCount) { return null }
+
+    return playlistIndex
 }
 
 @Composable
@@ -397,29 +449,20 @@ private fun LazyItemScope.PlayListItem(playListType: PlayListType, title: String
 
 /**
  * Pin-aware variant of [PlayListItem] used for the Library list
- * (PRD §5.4). Adds:
- *   - a small pin badge over the cover when [isPinned],
- *   - a long-press detector on pinned rows that enters reorder
- *     mode (via the caller-supplied [onLongPress]),
- *   - a trailing drag handle and translation Y while in reorder mode.
- *
- * Non-pinned rows behave exactly like the legacy [PlayListItem]; the
- * external [dimmed] flag drives a visual "this row isn't interactive
- * right now" cue while reorder mode is active.
+ * (PRD §5.4). Adds a small pin badge over the cover and a queue-style
+ * reorder handle for pinned rows while reorder mode is active.
  */
 @Composable
 private fun LazyItemScope.PinnedAwarePlayListItem(
     playList: PlayList,
     isPinned: Boolean,
     reorderActive: Boolean,
+    reorderEnabled: Boolean,
     draggingThisRow: Boolean,
-    dragOffsetPx: Float,
     dimmed: Boolean,
-    onClick: () -> Unit,
+    reorderHandleModifier: Modifier,
     onLongPress: (() -> Unit)?,
-    onDragStart: (() -> Unit)?,
-    onDrag: ((Float) -> Unit)?,
-    onDragEnd: (() -> Unit)?,
+    onClick: () -> Unit,
 ) {
     val shape = YosRoundedCornerShape(4.dp)
     val density = LocalDensity.current
@@ -431,36 +474,25 @@ private fun LazyItemScope.PinnedAwarePlayListItem(
             .height(80.dp)
             .fillMaxWidth()
             .graphicsLayer {
-                translationY = dragOffsetPx
                 if (draggingThisRow) {
                     scaleX = 1.02f
                     scaleY = 1.02f
                     shadowElevation = 16f
                 }
             }
-            .clickable(enabled = !reorderActive) { onClick() }
             .then(
                 if (onLongPress != null) {
-                    Modifier.pointerInput(playList.listID, reorderActive) {
-                        if (reorderActive) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { onDragStart?.invoke() },
-                                onDragEnd = { onDragEnd?.invoke() },
-                                onDragCancel = { onDragEnd?.invoke() },
-                                onDrag = { _, dragAmount ->
-                                    onDrag?.invoke(dragAmount.y)
-                                },
-                            )
-                        } else {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { onLongPress() },
-                                onDragEnd = {},
-                                onDragCancel = {},
-                                onDrag = { _, _ -> },
-                            )
-                        }
+                    Modifier.pointerInput(playList.listID) {
+                        detectTapGestures(
+                            onTap = {
+                                if (!reorderActive) { onClick() }
+                            },
+                            onLongPress = { onLongPress() },
+                        )
                     }
-                } else Modifier
+                } else {
+                    Modifier.clickable(enabled = !reorderActive) { onClick() }
+                }
             )
             .alpha(rowAlpha)
             .padding(start = 22.dp, end = 10.dp),
@@ -567,15 +599,20 @@ private fun LazyItemScope.PinnedAwarePlayListItem(
             )
         }
 
-        if (reorderActive && isPinned) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_action_drag_handle),
-                contentDescription = stringResource(R.string.playlist_edit_drag_handle_cd),
+        if (reorderEnabled) {
+            Box(
                 modifier = Modifier
-                    .size(28.dp)
-                    .alpha(0.55f),
-                tint = MaterialTheme.colorScheme.onBackground,
-            )
+                    .size(42.dp)
+                    .then(reorderHandleModifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_queue_reorder),
+                    contentDescription = stringResource(R.string.playlist_edit_drag_handle_cd),
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.34f),
+                )
+            }
         } else {
             Icon(
                 painter = painterResource(id = R.drawable.ic_action_next),
