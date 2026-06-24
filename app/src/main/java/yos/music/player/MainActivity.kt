@@ -4,8 +4,13 @@ package yos.music.player
 
 import android.Manifest
 import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -1228,15 +1233,29 @@ class MainActivity : BaseActivity() {
                                                                                     }),
                                                                             contentAlignment = Alignment.Center
                                                                         ) {
-                                                                            Icon(
-                                                                                painterResource(
-                                                                                    id = R.drawable.ic_nowplaying_airplay
-                                                                                ),
-                                                                                contentDescription = "AirPlay",
-                                                                                modifier = Modifier
-                                                                                    .size(21.5.dp),
-                                                                                tint = Color.Black withNight Color.White
-                                                                            )
+                                                                            val bluetoothAudioConnected = rememberBluetoothAudioConnected()
+                                                                            AnimatedContent(
+                                                                                targetState = bluetoothAudioConnected,
+                                                                                transitionSpec = {
+                                                                                    (scaleIn(initialScale = 0.3f) + fadeIn()).togetherWith(
+                                                                                        scaleOut(targetScale = 0.3f) + fadeOut()
+                                                                                    )
+                                                                                }
+                                                                            ) { connected ->
+                                                                                Icon(
+                                                                                    painterResource(
+                                                                                        id = if (connected) {
+                                                                                            R.drawable.ic_earphone
+                                                                                        } else {
+                                                                                            R.drawable.ic_nowplaying_airplay
+                                                                                        }
+                                                                                    ),
+                                                                                    contentDescription = "AirPlay",
+                                                                                    modifier = Modifier
+                                                                                        .size(if (connected) 27.dp else 21.5.dp),
+                                                                                    tint = Color.Black withNight Color.White
+                                                                                )
+                                                                            }
                                                                         }
                                                                     }
                                                                 }
@@ -1272,8 +1291,78 @@ class MainActivity : BaseActivity() {
                     /*}*/
                 }
             }
+    }
+}
+
+@Composable
+private fun rememberBluetoothAudioConnected(): Boolean
+{
+    val context = LocalContext.current
+    val bluetoothAdapter = remember { BluetoothAdapter.getDefaultAdapter() }
+    val bluetoothAudioConnected = remember("MainActivity_bluetoothAudioConnected") {
+        mutableStateOf(false)
+    }
+
+    DisposableEffect(context, bluetoothAdapter) {
+        val refreshBluetoothAudioConnected = {
+            bluetoothAudioConnected.value = if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                false
+            } else {
+                bluetoothAdapter
+                    ?.bondedDevices
+                    ?.any { device ->
+                        device.bluetoothClass.majorDeviceClass == BluetoothClass.Device.Major.AUDIO_VIDEO &&
+                            device.isConnected()
+                    } == true
+            }
+        }
+        val receiver = object : BroadcastReceiver()
+        {
+            override fun onReceive(context: Context?, intent: Intent?)
+            {
+                val action = intent?.action
+                if (action == BluetoothDevice.ACTION_ACL_CONNECTED ||
+                    action == BluetoothDevice.ACTION_ACL_DISCONNECTED ||
+                    action == "yos.music.player.BLUETOOTH_STATUS_REFRESH") {
+                    refreshBluetoothAudioConnected()
+                }
+            }
+        }
+        val filter = IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED).apply {
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction("yos.music.player.BLUETOOTH_STATUS_REFRESH")
+        }
+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED,
+        )
+        refreshBluetoothAudioConnected()
+
+        onDispose {
+            runCatching {
+                context.unregisterReceiver(receiver)
+            }
         }
     }
+
+    return bluetoothAudioConnected.value
+}
+
+private fun BluetoothDevice.isConnected(): Boolean
+{
+    return runCatching {
+        val isConnectedMethod = BluetoothDevice::class.java.getMethod("isConnected")
+        isConnectedMethod.isAccessible = true
+        isConnectedMethod.invoke(this) as Boolean
+    }.getOrDefault(false)
+}
 
         @Composable
     fun CheckAndRequestPermission() {
