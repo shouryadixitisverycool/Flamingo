@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -55,6 +56,7 @@ import com.cormor.overscroll.core.overScrollVertical
 import com.cormor.overscroll.core.rememberOverscrollFlingBehavior
 import com.google.accompanist.insets.navigationBarsHeight
 import yos.music.player.R
+import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
 import yos.music.player.ui.widgets.basic.SearchTextField
@@ -247,6 +249,7 @@ fun MusicDetailCircleButton(
     iconSize: androidx.compose.ui.unit.Dp = 22.dp,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val backgroundColor = if (accent) {
         Color.White.copy(alpha = 0.14f)
     } else {
@@ -268,7 +271,10 @@ fun MusicDetailCircleButton(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    Vibrator.click(context)
+                    onClick()
+                },
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -306,6 +312,7 @@ fun RowScope.MusicDetailPillButton(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val tint = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -323,7 +330,10 @@ fun RowScope.MusicDetailPillButton(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    Vibrator.click(context)
+                    onClick()
+                },
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -569,6 +579,8 @@ private fun MusicDetailTopBarButton(
     iconTint: Color,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     Box(
         modifier = Modifier
             .size(44.dp)
@@ -577,7 +589,10 @@ private fun MusicDetailTopBarButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    Vibrator.click(context)
+                    onClick()
+                },
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -597,6 +612,8 @@ private fun MusicDetailTopBarInlineButton(
     iconTint: Color,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     Box(
         modifier = Modifier
             .size(36.dp)
@@ -604,7 +621,10 @@ private fun MusicDetailTopBarInlineButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    Vibrator.click(context)
+                    onClick()
+                },
             ),
         contentAlignment = Alignment.Center,
     ) {
