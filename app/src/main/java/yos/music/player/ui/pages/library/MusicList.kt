@@ -362,6 +362,9 @@ private fun SongContextMenu(
         },
         onGoToArtist = { artistName ->
             visibleState.value = false
+            if (navController.currentDestination?.route == UI.ArtistInfo &&
+                LibraryObject.getTargetArtistName() == artistName) { return@SongContextMenuPopup }
+
             LibraryObject.setTargetArtistName(artistName)
             LibraryObject.setArtistSongsSearchOnOpen(false)
             navController.toUI(UI.ArtistInfo)

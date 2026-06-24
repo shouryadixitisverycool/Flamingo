@@ -363,6 +363,9 @@ fun AlbumInfo(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clickable(enabled = artistPageTargetName != null) {
                     val targetArtistName = artistPageTargetName ?: return@clickable
+                    if (navController.currentDestination?.route == UI.ArtistInfo &&
+                        LibraryObject.getTargetArtistName() == targetArtistName) { return@clickable }
+
                     LibraryObject.setTargetArtistName(targetArtistName)
                     LibraryObject.setArtistSongsSearchOnOpen(false)
                     navController.toUI(UI.ArtistInfo)
