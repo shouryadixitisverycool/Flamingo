@@ -432,17 +432,13 @@ private fun SongContextMenuPopup(
             val anchorTop = with(density) {
                 anchorPosition.y.toDp()
             }
-            val expandedArtistHeight = if (artistNames.size > 1) {
-                (artistNames.size * 36).dp
-            } else {
-                0.dp
-            }
-            val maxTop = maxHeight - SongContextMenuEstimatedHeight - expandedArtistHeight
+            val maxTop = maxHeight - SongContextMenuEstimatedHeight
             val menuTop = if (maxTop > 16.dp) {
                 anchorTop.coerceIn(16.dp, maxTop)
             } else {
                 16.dp
             }
+            val menuMaxHeight = (maxHeight - menuTop - 16.dp).coerceAtLeast(96.dp)
 
             AnimatedVisibility(
                 modifier = Modifier
@@ -479,6 +475,7 @@ private fun SongContextMenuPopup(
             ) {
                 SongContextMenuCard(
                     music = music,
+                    maxHeight = menuMaxHeight,
                     artistNames = artistNames,
                     isFavorite = isFavorite,
                     onAddToQueue = onAddToQueue,
@@ -496,6 +493,7 @@ private fun SongContextMenuPopup(
 @Composable
 private fun SongContextMenuCard(
     music: YosMediaItem,
+    maxHeight: Dp,
     artistNames: List<String>,
     isFavorite: Boolean,
     onAddToQueue: () -> Unit,
@@ -522,10 +520,12 @@ private fun SongContextMenuCard(
             R.string.song_context_add_to_favourites
         },
     )
+    val bodyMaxHeight = (maxHeight - 64.dp - 0.5.dp).coerceAtLeast(0.dp)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = maxHeight)
             .graphicsLayer {
                 this.shape = shape
                 shadowElevation = 28f
@@ -546,82 +546,89 @@ private fun SongContextMenuCard(
             onAlbumClick = onGoToAlbum,
         )
         SongContextMenuDivider(color = dividerColor)
-        SongContextMenuItem(
-            label = stringResource(id = R.string.song_context_play_next),
-            iconRes = R.drawable.ic_swipe_queue,
-            onClick = onAddToQueue,
-        )
-        SongContextMenuDivider(color = dividerColor)
-        SongContextMenuItem(
-            label = stringResource(id = R.string.song_context_add_to_playlist),
-            iconRes = R.drawable.ic_song_context_playlist,
-            labelTrailingIconRes = R.drawable.ic_action_next,
-            labelTrailingIconRotation = if (playlistOptionsExpanded) {
-                90f
-            } else {
-                0f
-            },
-            onClick = {
-                playlistOptionsExpanded = !playlistOptionsExpanded
-            },
-        )
-        AnimatedVisibility(visible = playlistOptionsExpanded) {
-            SongContextPlaylistDropDown(
-                music = music,
-                onAddToPlaylist = onAddToPlaylist,
-                onCreatePlaylist = onCreatePlaylist,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = bodyMaxHeight)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            SongContextMenuItem(
+                label = stringResource(id = R.string.song_context_play_next),
+                iconRes = R.drawable.ic_swipe_queue,
+                onClick = onAddToQueue,
             )
-        }
-        SongContextMenuDivider(color = dividerColor)
-        SongContextMenuItem(
-            label = favoriteLabel,
-            iconRes = if (isFavorite) {
-                R.drawable.ic_nowplaying_favorited
-            } else {
-                R.drawable.ic_nowplaying_favorite
-            },
-            onClick = onToggleFavorite,
-        )
-        SongContextMenuDivider(color = dividerColor)
-        SongContextMenuItem(
-            label = stringResource(id = R.string.song_context_go_to_artist),
-            iconRes = R.drawable.ic_song_context_artist,
-            labelTrailingIconRes = if (artistNames.size > 1) {
-                R.drawable.ic_action_next
-            } else {
-                null
-            },
-            labelTrailingIconRotation = if (artistOptionsExpanded) {
-                90f
-            } else {
-                0f
-            },
-            onClick = {
-                if (artistNames.size == 1) {
-                    onGoToArtist(artistNames.first())
+            SongContextMenuDivider(color = dividerColor)
+            SongContextMenuItem(
+                label = stringResource(id = R.string.song_context_add_to_playlist),
+                iconRes = R.drawable.ic_song_context_playlist,
+                labelTrailingIconRes = R.drawable.ic_action_next,
+                labelTrailingIconRotation = if (playlistOptionsExpanded) {
+                    90f
                 } else {
-                    artistOptionsExpanded = !artistOptionsExpanded
-                }
-            },
-        )
-        AnimatedVisibility(visible = artistOptionsExpanded && artistNames.size > 1) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                artistNames.forEach { artistName ->
-                    SongContextArtistOptionItem(
-                        artistName = artistName,
-                        onClick = {
-                            onGoToArtist(artistName)
-                        },
-                    )
+                    0f
+                },
+                onClick = {
+                    playlistOptionsExpanded = !playlistOptionsExpanded
+                },
+            )
+            AnimatedVisibility(visible = playlistOptionsExpanded) {
+                SongContextPlaylistDropDown(
+                    music = music,
+                    onAddToPlaylist = onAddToPlaylist,
+                    onCreatePlaylist = onCreatePlaylist,
+                )
+            }
+            SongContextMenuDivider(color = dividerColor)
+            SongContextMenuItem(
+                label = favoriteLabel,
+                iconRes = if (isFavorite) {
+                    R.drawable.ic_nowplaying_favorited
+                } else {
+                    R.drawable.ic_nowplaying_favorite
+                },
+                onClick = onToggleFavorite,
+            )
+            SongContextMenuDivider(color = dividerColor)
+            SongContextMenuItem(
+                label = stringResource(id = R.string.song_context_go_to_artist),
+                iconRes = R.drawable.ic_song_context_artist,
+                labelTrailingIconRes = if (artistNames.size > 1) {
+                    R.drawable.ic_action_next
+                } else {
+                    null
+                },
+                labelTrailingIconRotation = if (artistOptionsExpanded) {
+                    90f
+                } else {
+                    0f
+                },
+                onClick = {
+                    if (artistNames.size == 1) {
+                        onGoToArtist(artistNames.first())
+                    } else {
+                        artistOptionsExpanded = !artistOptionsExpanded
+                    }
+                },
+            )
+            AnimatedVisibility(visible = artistOptionsExpanded && artistNames.size > 1) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    artistNames.forEach { artistName ->
+                        SongContextArtistOptionItem(
+                            artistName = artistName,
+                            onClick = {
+                                onGoToArtist(artistName)
+                            },
+                        )
+                    }
                 }
             }
+            SongContextMenuDivider(color = dividerColor)
+            SongContextMenuItem(
+                label = stringResource(id = R.string.song_context_go_to_album),
+                iconRes = R.drawable.ic_song_context_album,
+                onClick = onGoToAlbum,
+            )
         }
-        SongContextMenuDivider(color = dividerColor)
-        SongContextMenuItem(
-            label = stringResource(id = R.string.song_context_go_to_album),
-            iconRes = R.drawable.ic_song_context_album,
-            onClick = onGoToAlbum,
-        )
     }
 }
 

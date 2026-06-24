@@ -189,6 +189,7 @@
     <string name="playlist_overflow_edit">Edit Playlist</string>
     <string name="playlist_overflow_pin">Pin Playlist</string>
     <string name="playlist_overflow_unpin">Unpin Playlist</string>
+    <string name="playlist_overflow_reorder">Reorder Playlists</string>
     <string name="playlist_overflow_add_to">Add to a Playlist…</string>
     <string name="playlist_overflow_play_next">Play Next</string>
     <string name="playlist_overflow_delete">Delete Playlist</string>
