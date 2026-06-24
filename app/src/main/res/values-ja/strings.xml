@@ -176,6 +176,14 @@
     <string name="now_playing_overflow_sleep_timer">Sleep Timer</string>
     <string name="now_playing_overflow_more_cd">More options</string>
 
+    <!-- Song list context menu -->
+    <string name="song_context_play_next">次に再生（キューに追加）</string>
+    <string name="song_context_add_to_playlist">プレイリストに追加</string>
+    <string name="song_context_add_to_favourites">お気に入りに追加</string>
+    <string name="song_context_remove_from_favourites">お気に入りから削除</string>
+    <string name="song_context_go_to_artist">アーティストへ移動</string>
+    <string name="song_context_go_to_album">アルバムへ移動</string>
+
     <!-- TODO: translate. Playlist overhaul. -->
     <string name="playlist_overflow_sort_by">Sort By</string>
     <string name="playlist_overflow_edit">Edit Playlist</string>

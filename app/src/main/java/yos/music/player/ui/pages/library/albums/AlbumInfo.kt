@@ -456,6 +456,7 @@ fun AlbumInfo(
                     onQueueSwipe = {
                         MediaController.addToQueue(music)
                     },
+                    navController = navController,
                     itemClick = {
                         scope.launch(Dispatchers.IO) {
                             MediaController.prepare(music, displayedSongs.value)

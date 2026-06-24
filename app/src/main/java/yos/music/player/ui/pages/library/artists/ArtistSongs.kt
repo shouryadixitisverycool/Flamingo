@@ -161,6 +161,7 @@ fun ArtistSongs(navController: NavController)
             ) { index, music ->
                 ArtistSongItem(
                     music = music,
+                    navController = navController,
                     onPlay = {
                         scope.launch(Dispatchers.IO) {
                             MediaController.prepare(music, displayedSongs.value)
@@ -186,6 +187,7 @@ fun ArtistSongs(navController: NavController)
 @Composable
 private fun ArtistSongItem(
     music: YosMediaItem,
+    navController: NavController,
     onPlay: () -> Unit,
 )
 {
@@ -194,6 +196,7 @@ private fun ArtistSongItem(
         onQueueSwipe = {
             MediaController.addToQueue(music)
         },
+        navController = navController,
     ) {
         onPlay()
     }

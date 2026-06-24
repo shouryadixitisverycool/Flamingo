@@ -503,6 +503,7 @@ fun NormalMusic(navController: NavController) {
                                     onQueueSwipe = {
                                         MediaController.addToQueue(music)
                                     },
+                                    navController = navController,
                                 ) {
                                     scope.launch(Dispatchers.IO) {
                                         MediaController.prepare(music, list.value)
@@ -624,6 +625,7 @@ fun NormalMusic(navController: NavController) {
                                 onQueueSwipe = {
                                     MediaController.addToQueue(music)
                                 },
+                                navController = navController,
                             ) {
                                 scope.launch(Dispatchers.IO) {
                                     MediaController.prepare(music, list.value)

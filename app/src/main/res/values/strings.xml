@@ -176,6 +176,14 @@
     <string name="now_playing_overflow_sleep_timer">Sleep Timer</string>
     <string name="now_playing_overflow_more_cd">More options</string>
 
+    <!-- Song list context menu -->
+    <string name="song_context_play_next">Play Next (Add to Queue)</string>
+    <string name="song_context_add_to_playlist">Add to Playlist</string>
+    <string name="song_context_add_to_favourites">Add to Favourites</string>
+    <string name="song_context_remove_from_favourites">Remove from Favourites</string>
+    <string name="song_context_go_to_artist">Go to Artist</string>
+    <string name="song_context_go_to_album">Go to Album</string>
+
     <!-- Playlist overhaul: detail-page overflow menu -->
     <string name="playlist_overflow_sort_by">Sort By</string>
     <string name="playlist_overflow_edit">Edit Playlist</string>
