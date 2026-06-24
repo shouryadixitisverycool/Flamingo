@@ -66,6 +66,7 @@ import yos.music.player.data.libraries.artistsName
 import yos.music.player.data.libraries.defaultArtists
 import yos.music.player.data.libraries.defaultArtistsName
 import yos.music.player.data.libraries.defaultTitle
+import yos.music.player.data.libraries.lazyListKey
 import yos.music.player.data.libraries.toMultipleArtists
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
@@ -425,7 +426,7 @@ fun AlbumInfo(
         } else {
             itemsIndexed(
                 displayedSongs.value,
-                key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                key = { index, music -> music.lazyListKey(index) },
                 contentType = { _, _ -> "AlbumInfo_song" },
             ) { index, music ->
                 val subtitle = remember(music, primaryArtists) {

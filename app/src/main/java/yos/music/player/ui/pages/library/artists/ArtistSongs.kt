@@ -35,6 +35,7 @@ import yos.music.player.R
 import yos.music.player.code.MediaController
 import yos.music.player.data.libraries.ArtistLibrary
 import yos.music.player.data.libraries.YosMediaItem
+import yos.music.player.data.libraries.lazyListKey
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.pages.library.MusicList
 import yos.music.player.ui.pages.library.playlists.PlayListSearch
@@ -156,7 +157,7 @@ fun ArtistSongs(navController: NavController)
         } else {
             itemsIndexed(
                 displayedSongs.value,
-                key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                key = { index, music -> music.lazyListKey(index) },
                 contentType = { _, _ -> "ArtistSongs_song" },
             ) { index, music ->
                 ArtistSongItem(

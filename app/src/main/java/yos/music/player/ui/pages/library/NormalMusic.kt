@@ -87,6 +87,7 @@ import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.libraries.artistsList
 import yos.music.player.data.libraries.defaultArtists
 import yos.music.player.data.libraries.defaultTitle
+import yos.music.player.data.libraries.lazyListKey
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
@@ -495,7 +496,7 @@ fun NormalMusic(navController: NavController) {
                         } else {
                             itemsIndexed(
                                 list.value,
-                                key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                                key = { index, music -> music.lazyListKey(index) },
                                 contentType = { _, _ -> "MusicList_item" },
                             ) { index, music ->
                                 MusicList(
@@ -617,7 +618,7 @@ fun NormalMusic(navController: NavController) {
 
                         itemsIndexed(
                             list.value,
-                            key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+                            key = { index, music -> music.lazyListKey(index) },
                             contentType = { _, _ -> "MusicList_item" },
                         ) { index, music ->
                             MusicList(

@@ -64,6 +64,7 @@ import yos.music.player.data.libraries.PlayListLibrary.addMusic
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.YosMediaItem
+import yos.music.player.data.libraries.lazyListKey
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
 import yos.music.player.ui.consumeNowPlayingNavigationMarker
@@ -328,7 +329,7 @@ fun ArtistInfo(
 
         itemsIndexed(
             artistSongs.take(5),
-            key = { _, music -> music.uri ?: music.mediaId ?: music.title ?: music.hashCode() },
+            key = { index, music -> music.lazyListKey(index) },
             contentType = { _, _ -> "ArtistInfo_song" },
         ) { index, music ->
             MusicList(
