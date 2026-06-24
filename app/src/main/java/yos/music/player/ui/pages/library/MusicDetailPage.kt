@@ -48,6 +48,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cormor.overscroll.core.overScrollVertical
@@ -69,11 +70,20 @@ fun MusicDetailPage(
     showSearchButton: Boolean = enableSearch,
     searchModeActive: Boolean,
     searchRequestFocusSignal: Int,
+    searchTopPadding: Dp = 64.dp,
     onBack: () -> Unit,
     onSort: () -> Unit,
     onSearchTextChange: (String) -> Unit,
     onSearchClick: () -> Unit,
     onSearchDismiss: () -> Unit,
+    topBarFirstActionIconRes: Int? = null,
+    topBarFirstActionContentDescription: String? = null,
+    topBarFirstActionSelected: Boolean = false,
+    onTopBarFirstActionClick: (() -> Unit)? = null,
+    topBarSecondActionIconRes: Int? = null,
+    topBarSecondActionContentDescription: String? = null,
+    topBarSecondActionSelected: Boolean = false,
+    onTopBarSecondActionClick: (() -> Unit)? = null,
     artwork: @Composable BoxScope.() -> Unit,
     headerContent: @Composable ColumnScope.() -> Unit,
     actionContent: @Composable () -> Unit,
@@ -172,7 +182,7 @@ fun MusicDetailPage(
                             .fillMaxWidth()
                             .statusBarsPadding()
                             .padding(horizontal = 18.dp)
-                            .padding(top = 64.dp, bottom = 8.dp),
+                            .padding(top = searchTopPadding, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         SearchTextField(
@@ -214,6 +224,14 @@ fun MusicDetailPage(
             } else {
                 onSearchClick
             },
+            topBarFirstActionIconRes = topBarFirstActionIconRes,
+            topBarFirstActionContentDescription = topBarFirstActionContentDescription,
+            topBarFirstActionSelected = topBarFirstActionSelected,
+            onTopBarFirstActionClick = onTopBarFirstActionClick,
+            topBarSecondActionIconRes = topBarSecondActionIconRes,
+            topBarSecondActionContentDescription = topBarSecondActionContentDescription,
+            topBarSecondActionSelected = topBarSecondActionSelected,
+            onTopBarSecondActionClick = onTopBarSecondActionClick,
         )
     }
 }
@@ -339,6 +357,14 @@ private fun MusicDetailTopBar(
     onBack: () -> Unit,
     onSort: () -> Unit,
     onSearchClick: () -> Unit,
+    topBarFirstActionIconRes: Int?,
+    topBarFirstActionContentDescription: String?,
+    topBarFirstActionSelected: Boolean,
+    onTopBarFirstActionClick: (() -> Unit)?,
+    topBarSecondActionIconRes: Int?,
+    topBarSecondActionContentDescription: String?,
+    topBarSecondActionSelected: Boolean,
+    onTopBarSecondActionClick: (() -> Unit)?,
 ) {
     val surfaceColor = lerp(
         start = Color.Black.copy(alpha = 0.34f),
@@ -350,6 +376,8 @@ private fun MusicDetailTopBar(
         stop = MaterialTheme.colorScheme.onBackground,
         fraction = collapseProgress,
     )
+    val firstCustomActionIconRes = topBarFirstActionIconRes
+    val secondCustomActionIconRes = topBarSecondActionIconRes
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -374,14 +402,37 @@ private fun MusicDetailTopBar(
                     onClick = onBack,
                 )
 
-                if (showSortButton && showSearchButton) {
-                    Row(
-                        modifier = Modifier
-                            .height(44.dp)
-                            .clip(YosRoundedCornerShape(18.dp))
-                            .background(surfaceColor)
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                if (firstCustomActionIconRes != null && secondCustomActionIconRes != null) {
+                    MusicDetailTopBarActionPill(
+                        surfaceColor = surfaceColor,
+                    ) {
+                        MusicDetailTopBarInlineButton(
+                            painter = painterResource(id = firstCustomActionIconRes),
+                            contentDescription = topBarFirstActionContentDescription,
+                            iconTint = if (topBarFirstActionSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                iconTint
+                            },
+                            onClick = onTopBarFirstActionClick ?: {},
+                        )
+
+                        MusicDetailTopBarPillDivider(iconTint = iconTint)
+
+                        MusicDetailTopBarInlineButton(
+                            painter = painterResource(id = secondCustomActionIconRes),
+                            contentDescription = topBarSecondActionContentDescription,
+                            iconTint = if (topBarSecondActionSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                iconTint
+                            },
+                            onClick = onTopBarSecondActionClick ?: {},
+                        )
+                    }
+                } else if (showSortButton && showSearchButton) {
+                    MusicDetailTopBarActionPill(
+                        surfaceColor = surfaceColor,
                     ) {
                         MusicDetailTopBarInlineButton(
                             painter = painterResource(id = R.drawable.ic_action_sort),
@@ -390,14 +441,7 @@ private fun MusicDetailTopBar(
                             onClick = onSort,
                         )
 
-                        Spacer(
-                            modifier = Modifier
-                                .padding(vertical = 6.dp)
-                                .width(1.dp)
-                                .fillMaxHeight()
-                                .alpha(0.12f)
-                                .background(iconTint),
-                        )
+                        MusicDetailTopBarPillDivider(iconTint = iconTint)
 
                         MusicDetailTopBarInlineButton(
                             painter = painterResource(
@@ -485,6 +529,34 @@ private fun MusicDetailTopBar(
 }
 
 @Composable
+private fun MusicDetailTopBarActionPill(
+    surfaceColor: Color,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .height(44.dp)
+            .clip(YosRoundedCornerShape(18.dp))
+            .background(surfaceColor)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+@Composable
+private fun MusicDetailTopBarPillDivider(iconTint: Color) {
+    Spacer(
+        modifier = Modifier
+            .padding(vertical = 6.dp)
+            .width(1.dp)
+            .fillMaxHeight()
+            .alpha(0.12f)
+            .background(iconTint),
+    )
+}
+
+@Composable
 private fun searchTitle(title: String): String {
     return stringResource(R.string.music_detail_search_cd, title)
 }
@@ -521,7 +593,7 @@ private fun MusicDetailTopBarButton(
 @Composable
 private fun MusicDetailTopBarInlineButton(
     painter: Painter,
-    contentDescription: String,
+    contentDescription: String?,
     iconTint: Color,
     onClick: () -> Unit,
 ) {

@@ -205,6 +205,17 @@ fun AlbumInfo(
             albumSongs.isNotEmpty() && albumSongs.all { FavPlayListLibrary.isFavorite(it) }
         }
     }
+    val toggleAlbumFavorite = {
+        if (allSongsFavorited) {
+            albumSongs.forEach { FavPlayListLibrary.removeMusic(it) }
+        } else {
+            albumSongs.forEach { song ->
+                if (!FavPlayListLibrary.isFavorite(song)) {
+                    FavPlayListLibrary.addMusic(song)
+                }
+            }
+        }
+    }
 
     androidx.compose.runtime.LaunchedEffect(
         albumSongs,
@@ -241,6 +252,15 @@ fun AlbumInfo(
         isOpen = overflowSheetOpen,
         items = listOf(
             ActionItem(
+                iconRes = R.drawable.ic_action_sort,
+                label = stringResource(id = R.string.playlist_sort_title),
+                showChevron = true,
+                onClick = {
+                    overflowSheetOpen.value = false
+                    sortSheetOpen.value = true
+                },
+            ),
+            ActionItem(
                 iconRes = R.drawable.ic_action_add,
                 label = stringResource(id = R.string.now_playing_overflow_add_to_playlist),
                 showChevron = false,
@@ -264,8 +284,11 @@ fun AlbumInfo(
         searchText = searchText.value,
         searchPlaceholder = stringResource(id = R.string.page_library_search_album_tracks),
         enableSearch = true,
+        showSortButton = false,
+        showSearchButton = false,
         searchModeActive = searchModeActive.value,
         searchRequestFocusSignal = searchFocusSignal.value,
+        searchTopPadding = 76.dp,
         onBack = handleBack,
         onSort = {
             sortSheetOpen.value = true
@@ -286,6 +309,31 @@ fun AlbumInfo(
                 searchModeActive.value = false
                 listState.scrollToItem(0)
             }
+        },
+        topBarFirstActionIconRes = if (searchModeActive.value) {
+            null
+        } else if (allSongsFavorited) {
+            R.drawable.ic_nowplaying_favorited
+        } else {
+            R.drawable.ic_nowplaying_favorite
+        },
+        topBarFirstActionContentDescription = stringResource(
+            id = if (allSongsFavorited) {
+                R.string.album_action_unfavorite
+            } else {
+                R.string.album_action_favorite
+            },
+        ),
+        topBarFirstActionSelected = allSongsFavorited,
+        onTopBarFirstActionClick = toggleAlbumFavorite,
+        topBarSecondActionIconRes = if (searchModeActive.value) {
+            null
+        } else {
+            R.drawable.ic_nowplaying_more
+        },
+        topBarSecondActionContentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+        onTopBarSecondActionClick = {
+            overflowSheetOpen.value = true
         },
         artwork = {
             AlbumHeroArtwork(songs = albumSongs)
@@ -339,6 +387,24 @@ fun AlbumInfo(
                 horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
             ) {
                 MusicDetailCircleButton(
+                    painter = painterResource(id = R.drawable.button_icon_shuffle),
+                    contentDescription = stringResource(id = R.string.normal_button_shuffle),
+                    enabled = displayedSongs.value.isNotEmpty(),
+                    onClick = {
+                        val songsToPlay = displayedSongs.value
+                        if (songsToPlay.isEmpty()) return@MusicDetailCircleButton
+
+                        scope.launch(Dispatchers.IO) {
+                            MediaController.prepare(
+                                songsToPlay.random(),
+                                songsToPlay,
+                                shuffleModeEnabled = true
+                            )
+                        }
+                    },
+                )
+
+                MusicDetailCircleButton(
                     painter = painterResource(id = R.drawable.button_icon_play),
                     contentDescription = stringResource(id = R.string.normal_button_play),
                     enabled = displayedSongs.value.isNotEmpty(),
@@ -353,58 +419,13 @@ fun AlbumInfo(
                 )
 
                 MusicDetailCircleButton(
-                    painter = painterResource(
-                        id = if (allSongsFavorited) {
-                            R.drawable.ic_nowplaying_favorited
-                        } else {
-                            R.drawable.ic_nowplaying_favorite
-                        },
-                    ),
-                    contentDescription = stringResource(
-                        id = if (allSongsFavorited) {
-                            R.string.album_action_unfavorite
-                        } else {
-                            R.string.album_action_favorite
-                        },
-                    ),
-                    selected = allSongsFavorited,
-                    iconSize = 26.dp,
+                    painter = painterResource(id = R.drawable.ic_action_search),
+                    contentDescription = stringResource(id = R.string.music_detail_search_cd, albumName.value),
                     onClick = {
-                        if (allSongsFavorited) {
-                            albumSongs.forEach { FavPlayListLibrary.removeMusic(it) }
-                        } else {
-                            albumSongs.forEach { song ->
-                                if (!FavPlayListLibrary.isFavorite(song)) {
-                                    FavPlayListLibrary.addMusic(song)
-                                }
-                            }
-                        }
-                    },
-                )
-
-                MusicDetailCircleButton(
-                    painter = painterResource(id = R.drawable.ic_nowplaying_more),
-                    contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
-                    iconSize = 26.dp,
-                    onClick = {
-                        overflowSheetOpen.value = true
-                    },
-                )
-
-                MusicDetailCircleButton(
-                    painter = painterResource(id = R.drawable.button_icon_shuffle),
-                    contentDescription = stringResource(id = R.string.normal_button_shuffle),
-                    enabled = displayedSongs.value.isNotEmpty(),
-                    onClick = {
-                        val songsToPlay = displayedSongs.value
-                        if (songsToPlay.isEmpty()) return@MusicDetailCircleButton
-
-                        scope.launch(Dispatchers.IO) {
-                            MediaController.prepare(
-                                songsToPlay.random(),
-                                songsToPlay,
-                                shuffleModeEnabled = true
-                            )
+                        scope.launch {
+                            searchModeActive.value = true
+                            listState.scrollToItem(0)
+                            searchFocusSignal.value += 1
                         }
                     },
                 )

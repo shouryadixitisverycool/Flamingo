@@ -49,9 +49,7 @@ import yos.music.player.R
 import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.PlayListLibrary
-import yos.music.player.data.libraries.PlayListLibrary.pin
 import yos.music.player.data.libraries.PlayListLibrary.playList
-import yos.music.player.data.libraries.PlayListLibrary.unpin
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
@@ -172,14 +170,9 @@ private fun OverflowMenuBody(
 ) {
     val sortLabel = stringResource(R.string.playlist_overflow_sort_by)
     val editLabel = stringResource(R.string.playlist_overflow_edit)
-    val pinLabel = stringResource(R.string.playlist_overflow_pin)
-    val unpinLabel = stringResource(R.string.playlist_overflow_unpin)
     val addToLabel = stringResource(R.string.playlist_overflow_add_to)
     val playNextLabel = stringResource(R.string.playlist_overflow_play_next)
     val deleteLabel = stringResource(R.string.playlist_overflow_delete)
-    val pinToastFmt = stringResource(R.string.playlist_pin_toast)
-    val unpinToastFmt = stringResource(R.string.playlist_unpin_toast)
-    val context = LocalContext.current
 
     // Resolve to the live record so the pin label/icon reflect any
     // concurrent state changes. Falls back to the snapshot if the
@@ -199,20 +192,6 @@ private fun OverflowMenuBody(
             label = editLabel,
             showChevron = false,
             onClick = onEdit,
-        ),
-        ActionItem(
-            iconRes = if (live.isPinned) R.drawable.ic_action_unpin else R.drawable.ic_action_pin,
-            label = if (live.isPinned) unpinLabel else pinLabel,
-            showChevron = false,
-            onClick = {
-                if (live.isPinned) {
-                    live.unpin()
-                    Toast.makeText(context, unpinToastFmt.format(live.name), Toast.LENGTH_SHORT).show()
-                } else {
-                    live.pin()
-                    Toast.makeText(context, pinToastFmt.format(live.name), Toast.LENGTH_SHORT).show()
-                }
-            },
         ),
         ActionItem(
             iconRes = R.drawable.ic_action_add,
