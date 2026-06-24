@@ -185,6 +185,7 @@ fun PlayLists(navController: NavController) {
     PlayListPickerSheet(
         isOpen = createPickerOpen,
         songToAdd = null,
+        centered = true,
     )
 
     contextMenuPlayList.value?.let { playListForMenu ->

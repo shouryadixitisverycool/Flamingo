@@ -26,8 +26,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,7 +42,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -50,6 +55,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import yos.music.player.R
 import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.PlayList
@@ -90,8 +97,36 @@ fun PlayListPickerSheet(
     isOpen: MutableState<Boolean>,
     songToAdd: YosMediaItem?,
     onCreated: ((PlayList) -> Unit)? = null,
+    centered: Boolean = false,
 ) {
     if (!isOpen.value) return
+
+    if (centered) {
+        Dialog(
+            onDismissRequest = { isOpen.value = false },
+            properties = DialogProperties(usePlatformDefaultWidth = true),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = Color.White withNight Color.Black,
+                contentColor = Color.Black withNight Color.White,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(26.dp),
+                ) {
+                    PlayListPickerContent(
+                        songToAdd = songToAdd,
+                        onDone = { isOpen.value = false },
+                        onCreated = onCreated,
+                    )
+                }
+            }
+        }
+        return
+    }
 
     YosBottomSheetDialog(onDismissRequest = { isOpen.value = false }) {
         PlayListPickerContent(
@@ -356,7 +391,14 @@ private fun CreatePlaylistBody(
     onCancel: () -> Unit,
 ) {
     val context = LocalContext.current
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val canConfirm = name.trim().isNotEmpty()
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
 
     // Text field — borrows the styling used by SearchTextField in
     // widgets/basic/YosTextField.kt for visual consistency.
@@ -398,7 +440,9 @@ private fun CreatePlaylistBody(
                     onDone = { if (canConfirm) onConfirm() },
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .focusRequester(focusRequester)
+                    .fillMaxWidth(),
             )
         }
     }
