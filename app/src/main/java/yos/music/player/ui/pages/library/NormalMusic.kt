@@ -79,7 +79,9 @@ import yos.music.player.data.libraries.MusicLibrary.songs
 import yos.music.player.data.libraries.MusicLibrary.toMediaItem
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.PlayListLibrary
+import yos.music.player.data.libraries.PlayListLibrary.pin
 import yos.music.player.data.libraries.PlayListLibrary.playList
+import yos.music.player.data.libraries.PlayListLibrary.unpin
 import yos.music.player.data.libraries.SettingsLibrary
 import yos.music.player.data.libraries.SettingsLibrary.EnableDescending
 import yos.music.player.data.libraries.SettingsLibrary.SongSort
@@ -347,8 +349,11 @@ fun NormalMusic(navController: NavController) {
                         searchText = searchText.value,
                         searchPlaceholder = stringResource(id = R.string.playlist_search_placeholder),
                         enableSearch = true,
+                        showSortButton = false,
+                        showSearchButton = false,
                         searchModeActive = playListSearchModeActive.value,
                         searchRequestFocusSignal = playListSearchFocusSignal.value,
+                        searchTopPadding = 76.dp,
                         onBack = {
                             navController.popBackStack()
                         },
@@ -371,6 +376,37 @@ fun NormalMusic(navController: NavController) {
                                 playListSearchModeActive.value = false
                                 playListListState.scrollToItem(0)
                             }
+                        },
+                        topBarFirstActionIconRes = if (playListSearchModeActive.value) {
+                            null
+                        } else if (activePlayList.isPinned) {
+                            R.drawable.ic_action_unpin
+                        } else {
+                            R.drawable.ic_action_pin
+                        },
+                        topBarFirstActionContentDescription = stringResource(
+                            id = if (activePlayList.isPinned) {
+                                R.string.playlist_overflow_unpin
+                            } else {
+                                R.string.playlist_overflow_pin
+                            },
+                        ),
+                        topBarFirstActionSelected = activePlayList.isPinned,
+                        onTopBarFirstActionClick = {
+                            if (activePlayList.isPinned) {
+                                activePlayList.unpin()
+                            } else {
+                                activePlayList.pin()
+                            }
+                        },
+                        topBarSecondActionIconRes = if (playListSearchModeActive.value) {
+                            null
+                        } else {
+                            R.drawable.ic_nowplaying_more
+                        },
+                        topBarSecondActionContentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                        onTopBarSecondActionClick = {
+                            overflowSheetOpen.value = true
                         },
                         artwork = {
                             PlayListHeroArtwork(playList = activePlayList)
@@ -427,6 +463,23 @@ fun NormalMusic(navController: NavController) {
                                 ),
                             ) {
                                 MusicDetailCircleButton(
+                                    painter = painterResource(id = R.drawable.button_icon_shuffle),
+                                    contentDescription = stringResource(id = R.string.normal_button_shuffle),
+                                    enabled = list.value.isNotEmpty(),
+                                    onClick = {
+                                        if (list.value.isEmpty()) return@MusicDetailCircleButton
+
+                                        scope.launch(Dispatchers.IO) {
+                                            MediaController.prepare(
+                                                list.value.random(),
+                                                list.value,
+                                                shuffleModeEnabled = true
+                                            )
+                                        }
+                                    },
+                                )
+
+                                MusicDetailCircleButton(
                                     painter = painterResource(id = R.drawable.button_icon_play),
                                     contentDescription = stringResource(id = R.string.normal_button_play),
                                     enabled = list.value.isNotEmpty(),
@@ -440,35 +493,13 @@ fun NormalMusic(navController: NavController) {
                                 )
 
                                 MusicDetailCircleButton(
-                                    painter = painterResource(id = R.drawable.ic_action_edit),
-                                    contentDescription = stringResource(id = R.string.playlist_overflow_edit),
+                                    painter = painterResource(id = R.drawable.ic_action_search),
+                                    contentDescription = stringResource(id = R.string.music_detail_search_cd, activePlayList.name),
                                     onClick = {
-                                        editModalOpen.value = true
-                                    },
-                                )
-
-                                MusicDetailCircleButton(
-                                    painter = painterResource(id = R.drawable.ic_nowplaying_more),
-                                    contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
-                                    iconSize = 26.dp,
-                                    onClick = {
-                                        overflowSheetOpen.value = true
-                                    },
-                                )
-
-                                MusicDetailCircleButton(
-                                    painter = painterResource(id = R.drawable.button_icon_shuffle),
-                                    contentDescription = stringResource(id = R.string.normal_button_shuffle),
-                                    enabled = list.value.isNotEmpty(),
-                                    onClick = {
-                                        if (list.value.isEmpty()) return@MusicDetailCircleButton
-
-                                        scope.launch(Dispatchers.IO) {
-                                            MediaController.prepare(
-                                                list.value.random(),
-                                                list.value,
-                                                shuffleModeEnabled = true
-                                            )
+                                        scope.launch {
+                                            playListSearchModeActive.value = true
+                                            playListListState.scrollToItem(0)
+                                            playListSearchFocusSignal.value += 1
                                         }
                                     },
                                 )
