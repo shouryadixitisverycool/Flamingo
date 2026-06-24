@@ -4,10 +4,11 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -35,13 +35,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,18 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -76,6 +70,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import yos.music.player.R
 import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.MusicLibrary.songs
@@ -88,10 +84,62 @@ import yos.music.player.data.libraries.defaultTitle
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
-import kotlin.math.roundToInt
 
 private const val DescriptionMaxChars = 200
 private const val NameMaxChars = 100
+private const val EditPlaylistSongListOffset = 5
+private val EditPlaylistRowHeight = 56.dp
+private val EditPlaylistDraggingItemShape = RoundedCornerShape(0.dp)
+
+private fun playlistEditItemKey(
+    songUri: Uri,
+    index: Int,
+    songUris: List<Uri>,
+): String {
+    val duplicateOrdinal = songUris
+        .take(index + 1)
+        .count { it == songUri }
+
+    return "edit_playlist:$songUri:$duplicateOrdinal"
+}
+
+private fun resolvePlaylistReorderTarget(
+    lazyListIndex: Int,
+    songListSize: Int,
+): Int? {
+    val songIndex = lazyListIndex - EditPlaylistSongListOffset
+
+    if (songIndex !in 0 until songListSize) {
+        return null
+    }
+
+    return songIndex
+}
+
+private fun movePlaylistSongDuringDrag(
+    workingSongs: SnapshotStateList<Uri>,
+    staged: SnapshotStateList<Int>,
+    fromIndex: Int,
+    toIndex: Int,
+) {
+    if (fromIndex !in workingSongs.indices || toIndex !in workingSongs.indices || fromIndex == toIndex) {
+        return
+    }
+
+    val movedSong = workingSongs.removeAt(fromIndex)
+    workingSongs.add(toIndex, movedSong)
+
+    val remapped = staged.map { stagedIndex ->
+        when {
+            stagedIndex == fromIndex -> toIndex
+            fromIndex < toIndex && stagedIndex in (fromIndex + 1)..toIndex -> stagedIndex - 1
+            toIndex < fromIndex && stagedIndex in toIndex until fromIndex -> stagedIndex + 1
+            else -> stagedIndex
+        }
+    }
+    staged.clear()
+    staged.addAll(remapped)
+}
 
 /**
  * Full-screen modal exposing every edit operation defined by PRD
@@ -241,7 +289,11 @@ private fun EditPlaylistContent(
     onClose: () -> Unit,
     onDone: () -> Unit,
 ) {
+    val context = LocalContext.current
     val listState = rememberLazyListState()
+    var draggingPlaylistItemKey by remember {
+        mutableStateOf<String?>(null)
+    }
 
     // Resolve URIs → YosMediaItem for display. Falls back to a
     // synthetic placeholder if the song was removed from the library
@@ -262,6 +314,28 @@ private fun EditPlaylistContent(
                     modifiedDate = null, cdTrackNumber = null,
                 )
         }
+    }
+    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+        val source = resolvePlaylistReorderTarget(
+            from.index,
+            workingSongs.size,
+        ) ?: return@rememberReorderableLazyListState
+        val destination = resolvePlaylistReorderTarget(
+            to.index,
+            workingSongs.size,
+        ) ?: return@rememberReorderableLazyListState
+
+        if (source == destination) {
+            return@rememberReorderableLazyListState
+        }
+
+        Vibrator.click(context)
+        movePlaylistSongDuringDrag(
+            workingSongs = workingSongs,
+            staged = staged,
+            fromIndex = source,
+            toIndex = destination,
+        )
     }
 
     LazyColumn(
@@ -301,51 +375,31 @@ private fun EditPlaylistContent(
         }
         itemsIndexed(
             items = resolvedSongs,
-            key = { idx, _ -> idx },
+            key = { index, _ -> playlistEditItemKey(workingSongs[index], index, workingSongs) },
         ) { index, song ->
-            EditSongRow(
-                index = index,
-                song = song,
-                isStaged = index in staged,
-                onToggleStaged = {
-                    if (index in staged) staged.remove(index) else staged.add(index)
-                },
-                onMoveUp = if (index > 0) {
-                    {
-                        val item = workingSongs.removeAt(index)
-                        workingSongs.add(index - 1, item)
-                        // Reindex staged positions so the user's
-                        // pending removals continue to point at the
-                        // intended songs after the reorder.
-                        // List#replaceAll is API 24+ (minSdk 23);
-                        // emulate with a clear+addAll cycle.
-                        val remapped = staged.map { stagedIdx ->
-                            when (stagedIdx) {
-                                index -> index - 1
-                                index - 1 -> index
-                                else -> stagedIdx
-                            }
-                        }
-                        staged.clear()
-                        staged.addAll(remapped)
-                    }
-                } else null,
-                onMoveDown = if (index < workingSongs.lastIndex) {
-                    {
-                        val item = workingSongs.removeAt(index)
-                        workingSongs.add(index + 1, item)
-                        val remapped = staged.map { stagedIdx ->
-                            when (stagedIdx) {
-                                index -> index + 1
-                                index + 1 -> index
-                                else -> stagedIdx
-                            }
-                        }
-                        staged.clear()
-                        staged.addAll(remapped)
-                    }
-                } else null,
-            )
+            val itemKey = playlistEditItemKey(workingSongs[index], index, workingSongs)
+
+            ReorderableItem(reorderableState, key = itemKey) { isDragging ->
+                EditSongRow(
+                    song = song,
+                    reorderEnabled = workingSongs.size > 1,
+                    isDragging = isDragging || draggingPlaylistItemKey == itemKey,
+                    isStaged = index in staged,
+                    reorderHandleModifier = Modifier.draggableHandle(
+                        onDragStarted = {
+                            draggingPlaylistItemKey = itemKey
+                            Vibrator.longClick(context)
+                        },
+                        onDragStopped = {
+                            draggingPlaylistItemKey = null
+                            Vibrator.click(context)
+                        },
+                    ),
+                    onToggleStaged = {
+                        if (index in staged) staged.remove(index) else staged.add(index)
+                    },
+                )
+            }
         }
     }
 }
@@ -616,97 +670,102 @@ private fun DescriptionField(description: String, onDescriptionChange: (String) 
 
 @Composable
 private fun EditSongRow(
-    index: Int,
     song: YosMediaItem,
+    reorderEnabled: Boolean,
+    isDragging: Boolean,
     isStaged: Boolean,
+    reorderHandleModifier: Modifier,
     onToggleStaged: () -> Unit,
-    onMoveUp: (() -> Unit)?,
-    onMoveDown: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     val shape = YosRoundedCornerShape(4.dp)
-    val accent = MaterialTheme.colorScheme.primary
     val destructive = MaterialTheme.colorScheme.error
     val rowAlpha = if (isStaged) 0.4f else 1f
+    val draggedItemBackground by animateColorAsState(
+        targetValue = Color.Transparent,
+        label = "EditPlaylistDraggedItemBackground",
+    )
+    val draggedItemElevation by animateDpAsState(
+        targetValue = if (isDragging) { 10.dp } else { 0.dp },
+        label = "EditPlaylistDraggedItemElevation",
+    )
 
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 6.dp)
-            .alpha(rowAlpha),
-        verticalAlignment = Alignment.CenterVertically,
+            .height(EditPlaylistRowHeight),
+        color = draggedItemBackground,
+        contentColor = Color.Black withNight Color.White,
+        shadowElevation = draggedItemElevation,
+        shape = EditPlaylistDraggingItemShape,
     ) {
-        // Checkbox — rounded square; filled with the destructive
-        // accent when staged for removal, outline-only when not.
-        // The outline is drawn with drawRoundRect (not drawRect inside
-        // a clipped Box) so corners render smoothly without the
-        // gappy artifacts the previous version produced.
-        RemovalCheckbox(
-            checked = isStaged,
-            destructive = destructive,
-            onToggle = onToggleStaged,
-        )
-        Spacer(modifier = Modifier.width(14.dp))
-        // Album art (or default).
-        Box(
+        Row(
             modifier = Modifier
-                .size(44.dp)
-                .clip(shape),
+                .fillMaxSize()
+                .padding(horizontal = 18.dp, vertical = 6.dp)
+                .alpha(rowAlpha),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (song.thumb != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(song.thumb).build(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Image(
-                    painter = painterResource(id = R.drawable.placeholder_playlist_default),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title ?: defaultTitle,
-                fontSize = 15.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            RemovalCheckbox(
+                checked = isStaged,
+                destructive = destructive,
+                onToggle = onToggleStaged,
             )
-            if (!song.artists.isNullOrBlank()) {
+            Spacer(modifier = Modifier.width(14.dp))
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(shape),
+            ) {
+                if (song.thumb != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(song.thumb).build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.placeholder_playlist_default),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = song.artists,
-                    fontSize = 13.sp,
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .alpha(0.55f),
+                    text = song.title ?: defaultTitle,
+                    fontSize = 15.5.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!song.artists.isNullOrBlank()) {
+                    Text(
+                        text = song.artists,
+                        fontSize = 13.sp,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .alpha(0.55f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-        }
-        // Reorder controls. Two small tappable arrows instead of a
-        // drag handle: long-press drag inside a LazyColumn requires
-        // hosting state outside Compose's lazy layout (since the
-        // visible item set changes mid-gesture), which adds enough
-        // complexity that a tap-up / tap-down pair is the better
-        // first cut for this release. PRD §10 open question.
-        Column(
-            modifier = Modifier.padding(start = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            ReorderArrow(
-                iconRes = R.drawable.ic_back,
-                rotationDegrees = 90f,
-                onClick = onMoveUp,
-            )
-            ReorderArrow(
-                iconRes = R.drawable.ic_back,
-                rotationDegrees = -90f,
-                onClick = onMoveDown,
-            )
+            if (reorderEnabled) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .then(reorderHandleModifier),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_queue_reorder),
+                        contentDescription = stringResource(R.string.playlist_edit_drag_handle_cd),
+                        tint = Color.Black.copy(alpha = 0.34f) withNight Color.White.copy(alpha = 0.34f),
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -779,37 +838,5 @@ private fun RemovalCheckbox(
                 modifier = Modifier.size(14.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun ReorderArrow(iconRes: Int, rotationDegrees: Float, onClick: (() -> Unit)?) {
-    val context = LocalContext.current
-    val enabled = onClick != null
-    Box(
-        modifier = Modifier
-            .size(22.dp)
-            .clip(CircleShape)
-            .alpha(if (enabled) 0.6f else 0.2f)
-            .clickable(
-                enabled = enabled,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {
-                Vibrator.click(context)
-                onClick?.invoke()
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = stringResource(R.string.playlist_edit_drag_handle_cd),
-            tint = Color.Black withNight Color.White,
-            modifier = Modifier
-                .size(14.dp)
-                .graphicsLayer {
-                    rotationZ = rotationDegrees
-                },
-        )
     }
 }
