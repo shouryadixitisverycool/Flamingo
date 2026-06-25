@@ -624,6 +624,37 @@ object MediaController {
         return true
     }
 
+    suspend fun clearNextInQueue(): Boolean {
+        val controller = mediaControl ?: return false
+        val currentNextInQueue = nextInQueueMusicList.value
+
+        if (currentNextInQueue.isEmpty()) { return false }
+
+        val currentQueue = currentQueueSnapshot(controller)
+        val currentIndex = withContext(Dispatchers.Main) {
+            controller.currentMediaItemIndex.coerceAtLeast(0)
+        }
+        val fromIndex = currentIndex + 1
+        val toIndex = fromIndex + currentNextInQueue.size
+
+        if (fromIndex !in currentQueue.indices || toIndex > currentQueue.size) { return false }
+
+        val updatedQueue = currentQueue.toMutableList().also {
+            it.subList(fromIndex, toIndex).clear()
+        }
+
+        withContext(Dispatchers.Main) {
+            controller.removeMediaItems(fromIndex, toIndex)
+        }
+
+        nextInQueueMusicList.value = emptyList()
+        orderedPlayingMusicList.value = updatedQueue
+        syncQueueState(updatedQueue, currentIndex, consumeNextInQueue = false)
+        saveQueueState()
+
+        return true
+    }
+
     suspend fun removeUpNextItem(index: Int): Boolean {
         val controller = mediaControl ?: return false
         val currentQueue = currentQueueSnapshot(controller)

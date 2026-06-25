@@ -212,11 +212,12 @@
     <string name="playlist_edit_cover_auto_cd">Auto cover</string>
     <string name="playlist_edit_drag_handle_cd">Drag to reorder</string>
     <string name="playlist_edit_remove_cd">Toggle remove</string>
-    <string name="playlist_play_next_toast_one">1曲を次のキューに追加しました</string>
-    <string name="playlist_play_next_toast_other">%d曲を次のキューに追加しました</string>
+    <string name="playlist_play_next_toast_one">1曲をキューに追加しました</string>
+    <string name="playlist_play_next_toast_other">%d曲をキューに追加しました</string>
     <string name="queue_added_toast">キューに追加しました</string>
-    <string name="queue_next_in_queue">次のキュー</string>
-    <string name="queue_up_next">次はこちら</string>
+    <string name="queue_next_in_queue">キュー</string>
+    <string name="queue_up_next">続けて再生</string>
+    <string name="queue_clear">消去</string>
     <string name="playlist_delete_undo_message">Deleted “%1$s”</string>
     <string name="playlist_delete_undo_action">Undo</string>
     <string name="playlist_pin_toast">Pinned “%1$s”</string>

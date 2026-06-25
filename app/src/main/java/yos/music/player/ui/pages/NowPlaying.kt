@@ -1135,7 +1135,14 @@ private fun PlayingList(
                             }
                             if (nextInQueue.isNotEmpty()) {
                                 item("next_in_queue_header") {
-                                    QueueSectionHeader(stringResource(id = R.string.queue_next_in_queue))
+                                    QueueSectionHeader(
+                                        title = stringResource(id = R.string.queue_next_in_queue),
+                                        onClear = {
+                                            scope.launch(Dispatchers.IO) {
+                                                MediaController.clearNextInQueue()
+                                            }
+                                        },
+                                    )
                                 }
 
                                 itemsIndexed(
@@ -1177,7 +1184,7 @@ private fun PlayingList(
 
                             if (upNext.isNotEmpty()) {
                                 item("up_next_header") {
-                                    QueueSectionHeader(stringResource(id = R.string.queue_up_next))
+                                    QueueSectionHeader(title = stringResource(id = R.string.queue_up_next))
                                 }
 
                                 itemsIndexed(
@@ -1231,19 +1238,44 @@ private fun PlayingList(
 }
 
 @Composable
-private fun QueueSectionHeader(title: String) {
-    Text(
-        text = title,
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Medium,
-        color = Color.White,
+private fun QueueSectionHeader(
+    title: String,
+    onClear: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 30.dp)
             .padding(top = 12.dp, bottom = 6.dp)
-            .overlayEffect()
-            .alpha(0.42f)
-    )
+            .overlayEffect(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            fontSize = 23.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier.weight(1f),
+        )
+
+        if (onClear != null) {
+            Text(
+                text = stringResource(id = R.string.queue_clear),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.64f),
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    Vibrator.click(context)
+                    onClear()
+                },
+            )
+        }
+    }
 }
 
 @Composable
