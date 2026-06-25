@@ -3,6 +3,7 @@ package yos.music.player.ui.pages.library.albums
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -78,6 +81,7 @@ import yos.music.player.ui.pages.library.FloatingMenu
 import yos.music.player.ui.pages.library.FloatingMenuDivider
 import yos.music.player.ui.pages.library.FloatingMenuItem
 import yos.music.player.ui.pages.library.FloatingMenuItemDivider
+import yos.music.player.ui.pages.library.FloatingMenuPlayListPickerContent
 import yos.music.player.ui.pages.library.MusicDetailPage
 import yos.music.player.ui.pages.library.MusicList
 import yos.music.player.ui.pages.library.playlists.PlayListSearch
@@ -87,14 +91,11 @@ import yos.music.player.ui.widgets.basic.ActionItem
 import yos.music.player.ui.widgets.basic.ActionSheetBody
 import yos.music.player.ui.widgets.basic.Title
 import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
-import yos.music.player.ui.widgets.playlist.PlayListPickerContent
 
 private enum class AlbumSortOption {
     TrackNumber,
     Title,
 }
-
-private enum class AlbumOverflowScreen { Menu, Sort, AddToPlaylist }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -170,9 +171,8 @@ fun AlbumInfo(
     val overflowSheetOpen = remember("AlbumInfo_overflowSheetOpen") {
         mutableStateOf(false)
     }
-    val overflowScreen = remember(albumName.value) {
-        mutableStateOf(AlbumOverflowScreen.Menu)
-    }
+    val sortExpanded = remember(albumName.value) { mutableStateOf(false) }
+    val addToPlaylistExpanded = remember(albumName.value) { mutableStateOf(false) }
     val overflowButtonPosition = remember("AlbumInfo_overflowButtonPosition") {
         mutableStateOf(Offset.Zero)
     }
@@ -261,32 +261,19 @@ fun AlbumInfo(
     FloatingMenu({ overflowSheetOpen.value }, {
         overflowSheetOpen.value = it
     }, overflowButtonPosition.value) {
-        when (overflowScreen.value) {
-            AlbumOverflowScreen.Menu -> {
-                FloatingMenuItem(
-                    label = stringResource(id = R.string.playlist_sort_title),
-                    icon = painterResource(id = R.drawable.ic_action_sort),
-                ) {
-                    overflowScreen.value = AlbumOverflowScreen.Sort
-                }
+        val accent = MaterialTheme.colorScheme.primary
+        FloatingMenuItem(
+            label = stringResource(id = R.string.playlist_sort_title),
+            icon = painterResource(id = R.drawable.ic_action_sort),
+            trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            trailingIconRotated = sortExpanded.value,
+        ) {
+            sortExpanded.value = !sortExpanded.value
+            if (sortExpanded.value) { addToPlaylistExpanded.value = false }
+        }
+        AnimatedVisibility(visible = sortExpanded.value) {
+            Column {
                 FloatingMenuItemDivider()
-                FloatingMenuItem(
-                    label = stringResource(id = R.string.now_playing_overflow_add_to_playlist),
-                    icon = painterResource(id = R.drawable.ic_action_add),
-                ) {
-                    overflowScreen.value = AlbumOverflowScreen.AddToPlaylist
-                }
-            }
-
-            AlbumOverflowScreen.Sort -> {
-                val accent = MaterialTheme.colorScheme.primary
-                FloatingMenuItem(
-                    label = stringResource(id = R.string.playlist_sort_title),
-                    icon = painterResource(id = R.drawable.ic_back),
-                ) {
-                    overflowScreen.value = AlbumOverflowScreen.Menu
-                }
-                FloatingMenuDivider()
                 FloatingMenuItem(
                     label = stringResource(id = R.string.album_sort_track_number),
                     icon = painterResource(id = R.drawable.ic_action_sort),
@@ -311,16 +298,27 @@ fun AlbumInfo(
                     tint = if (descending.value) accent else MaterialTheme.colorScheme.onBackground,
                 ) { descending.value = true }
             }
-
-            AlbumOverflowScreen.AddToPlaylist -> {
-                Box(Modifier.fillMaxWidth(0.82f).padding(18.dp)) {
-                    AlbumAddToPlaylistContent(
-                        albumName = albumName.value,
-                        songs = albumSongs,
-                        onDone = { overflowSheetOpen.value = false },
-                        onBack = { overflowScreen.value = AlbumOverflowScreen.Menu },
-                    )
-                }
+        }
+        FloatingMenuItemDivider()
+        FloatingMenuItem(
+            label = stringResource(id = R.string.now_playing_overflow_add_to_playlist),
+            icon = painterResource(id = R.drawable.ic_action_add),
+            trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            trailingIconRotated = addToPlaylistExpanded.value,
+        ) {
+            addToPlaylistExpanded.value = !addToPlaylistExpanded.value
+            if (addToPlaylistExpanded.value) { sortExpanded.value = false }
+        }
+        AnimatedVisibility(visible = addToPlaylistExpanded.value) {
+            Column {
+                FloatingMenuItemDivider()
+                AlbumAddToPlaylistContent(
+                    albumName = albumName.value,
+                    songs = albumSongs,
+                    showHeader = false,
+                    onDone = { overflowSheetOpen.value = false },
+                    onBack = { addToPlaylistExpanded.value = false },
+                )
             }
         }
     }
@@ -383,7 +381,8 @@ fun AlbumInfo(
             overflowButtonPosition.value = it
         },
         onTopBarSecondActionClick = {
-            overflowScreen.value = AlbumOverflowScreen.Menu
+            sortExpanded.value = false
+            addToPlaylistExpanded.value = false
             overflowSheetOpen.value = true
         },
         artwork = {
@@ -680,6 +679,7 @@ private fun AlbumAddToPlaylistSheet(
 private fun AlbumAddToPlaylistContent(
     albumName: String,
     songs: List<YosMediaItem>,
+    showHeader: Boolean = true,
     onDone: () -> Unit,
     onBack: (() -> Unit)? = null,
 ) {
@@ -713,15 +713,12 @@ private fun AlbumAddToPlaylistContent(
         }
     }
 
-    PlayListPickerContent(
-        songToAdd = null,
+    FloatingMenuPlayListPickerContent(
+        excludeListId = sourceStub.listID,
+        showHeader = showHeader,
+        onBack = onBack ?: onDone,
         onDone = onDone,
-        onBack = onBack,
-        bulkAddSource = sourceStub,
-        onBulkAdd = performBulkAdd,
-        onCreated = { created ->
-            performBulkAdd(created)
-        },
+        onPlaylistSelected = performBulkAdd,
     )
 }
 

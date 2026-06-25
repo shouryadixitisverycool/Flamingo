@@ -1,6 +1,8 @@
 package yos.music.player.ui.pages.library
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -8,6 +10,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,13 +25,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Person
@@ -51,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -58,17 +70,23 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
 import android.widget.Toast
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavController
 import com.github.promeg.pinyinhelper.Pinyin
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +99,7 @@ import yos.music.player.data.libraries.MusicLibrary.songs
 import yos.music.player.data.libraries.MusicLibrary.toMediaItem
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.PlayListLibrary
+import yos.music.player.data.libraries.PlayListLibrary.addMusic
 import yos.music.player.data.libraries.PlayListLibrary.pin
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.PlayListLibrary.unpin
@@ -95,8 +114,8 @@ import yos.music.player.data.libraries.lazyListKey
 import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
+import yos.music.player.ui.pages.library.playlists.PlayListAutoCover
 import yos.music.player.ui.pages.library.playlists.PlayListEditModal
-import yos.music.player.ui.pages.library.playlists.BulkAddToPlaylistBody
 import yos.music.player.ui.pages.library.playlists.PlayListSearch
 import yos.music.player.ui.pages.library.playlists.PlayListSortSheet
 import yos.music.player.ui.pages.library.playlists.PlayListSort
@@ -106,8 +125,6 @@ import yos.music.player.ui.widgets.basic.SearchTextField
 import yos.music.player.ui.widgets.basic.Title
 import yos.music.player.ui.widgets.basic.TitleBarIcon
 import yos.music.player.ui.widgets.basic.YosWrapper
-
-private enum class NormalMusicOverflowScreen { Menu, Sort, AddToPlaylist }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -246,9 +263,6 @@ fun NormalMusic(navController: NavController) {
             // the new bottom-sheet menu instead of the FloatingMenu
             // (which remains the right surface for Songs / Album / etc.).
             val overflowSheetOpen = remember { mutableStateOf(false) }
-            val overflowScreen = remember(activePlayList?.listID) {
-                mutableStateOf(NormalMusicOverflowScreen.Menu)
-            }
             val editModalOpen = remember { mutableStateOf(false) }
             val sortSheetOpen = remember { mutableStateOf(false) }
             val playListListState = rememberLazyListState()
@@ -279,84 +293,25 @@ fun NormalMusic(navController: NavController) {
                     val totalMinutes = remember(musicList) {
                         musicList.sumOf { it.duration } / 60000
                     }
+                    val sortExpanded = remember { mutableStateOf(false) }
+                    val addToPlaylistExpanded = remember { mutableStateOf(false) }
 
                     FloatingMenu({ overflowSheetOpen.value }, {
                         overflowSheetOpen.value = it
                     }, buttonPosition.value) {
-                        when (overflowScreen.value) {
-                            NormalMusicOverflowScreen.Menu -> {
-                                FloatingMenuItem(
-                                    label = stringResource(R.string.playlist_overflow_sort_by),
-                                    icon = painterResource(id = R.drawable.ic_action_sort),
-                                ) {
-                                    overflowScreen.value = NormalMusicOverflowScreen.Sort
-                                }
+                        val accent = MaterialTheme.colorScheme.primary
+                        FloatingMenuItem(
+                            label = stringResource(R.string.playlist_overflow_sort_by),
+                            icon = painterResource(id = R.drawable.ic_action_sort),
+                            trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            trailingIconRotated = sortExpanded.value,
+                        ) {
+                            sortExpanded.value = !sortExpanded.value
+                            if (sortExpanded.value) { addToPlaylistExpanded.value = false }
+                        }
+                        AnimatedVisibility(visible = sortExpanded.value) {
+                            Column {
                                 FloatingMenuItemDivider()
-                                FloatingMenuItem(
-                                    label = stringResource(R.string.playlist_overflow_edit),
-                                    icon = painterResource(id = R.drawable.ic_action_edit),
-                                ) {
-                                    overflowSheetOpen.value = false
-                                    editModalOpen.value = true
-                                }
-                                FloatingMenuDivider()
-                                FloatingMenuItem(
-                                    label = stringResource(R.string.playlist_overflow_add_to),
-                                    icon = painterResource(id = R.drawable.ic_action_add),
-                                ) {
-                                    overflowScreen.value = NormalMusicOverflowScreen.AddToPlaylist
-                                }
-                                FloatingMenuItemDivider()
-                                FloatingMenuItem(
-                                    label = stringResource(R.string.playlist_overflow_play_next),
-                                    icon = painterResource(id = R.drawable.ic_action_play_next),
-                                ) {
-                                    overflowSheetOpen.value = false
-                                    scope.launch(Dispatchers.IO) {
-                                        val songsInOrder = activePlayList.songDataList.mapNotNull { uri ->
-                                            yos.music.player.data.libraries.MusicLibrary.songs
-                                                .firstOrNull { it.uri == uri }
-                                        }
-                                        if (songsInOrder.isEmpty()) return@launch
-
-                                        val currentPlaying = MediaController.musicPlaying.value
-                                        if (currentPlaying == null) {
-                                            MediaController.prepare(songsInOrder.first(), songsInOrder)
-                                        } else {
-                                            MediaController.playNext(songsInOrder)
-                                        }
-
-                                        withContext(Dispatchers.Main) {
-                                            val msg = if (songsInOrder.size == 1) playNextOneFmt
-                                                else playNextManyFmt.format(songsInOrder.size)
-                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
-                                FloatingMenuDivider()
-                                FloatingMenuItem(
-                                    label = stringResource(R.string.playlist_overflow_delete),
-                                    icon = painterResource(id = R.drawable.ic_action_delete),
-                                    tint = MaterialTheme.colorScheme.error,
-                                ) {
-                                    overflowSheetOpen.value = false
-                                    val toRestore = activePlayList
-                                    val originalIndex = playList.indexOfFirst { it.listID == toRestore.listID }
-                                    PlayListLibrary.remove(toRestore)
-                                    PendingPlayListDeletion.stash(toRestore, originalIndex)
-                                    navController.popBackStack()
-                                }
-                            }
-
-                            NormalMusicOverflowScreen.Sort -> {
-                                val accent = MaterialTheme.colorScheme.primary
-                                FloatingMenuItem(
-                                    label = stringResource(R.string.playlist_sort_title),
-                                    icon = painterResource(id = R.drawable.ic_back),
-                                ) {
-                                    overflowScreen.value = NormalMusicOverflowScreen.Menu
-                                }
-                                FloatingMenuDivider()
                                 FloatingMenuItem(
                                     label = stringResource(R.string.playlist_sort_manual),
                                     icon = painterResource(id = R.drawable.ic_action_drag_handle),
@@ -393,16 +348,92 @@ fun NormalMusic(navController: NavController) {
                                     tint = if (PlayListSortPreference.descending) accent else MaterialTheme.colorScheme.onBackground,
                                 ) { PlayListSortPreference.descending = true }
                             }
+                        }
+                        FloatingMenuItemDivider()
+                        FloatingMenuItem(
+                            label = stringResource(R.string.playlist_overflow_edit),
+                            icon = painterResource(id = R.drawable.ic_action_edit),
+                        ) {
+                            overflowSheetOpen.value = false
+                            editModalOpen.value = true
+                        }
+                        FloatingMenuDivider()
+                        FloatingMenuItem(
+                            label = stringResource(R.string.playlist_overflow_add_to),
+                            icon = painterResource(id = R.drawable.ic_action_add),
+                            trailingIcon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            trailingIconRotated = addToPlaylistExpanded.value,
+                        ) {
+                            addToPlaylistExpanded.value = !addToPlaylistExpanded.value
+                            if (addToPlaylistExpanded.value) { sortExpanded.value = false }
+                        }
+                        AnimatedVisibility(visible = addToPlaylistExpanded.value) {
+                            Column {
+                                FloatingMenuItemDivider()
+                                FloatingMenuPlayListPickerContent(
+                                    excludeListId = activePlayList.listID,
+                                    showHeader = false,
+                                    onBack = { addToPlaylistExpanded.value = false },
+                                    onDone = { overflowSheetOpen.value = false },
+                                    onPlaylistSelected = { target ->
+                                        scope.launch(Dispatchers.IO) {
+                                            activePlayList.songDataList.forEach { uri ->
+                                                val live = playList.firstOrNull { it.listID == target.listID }
+                                                    ?: return@forEach
+                                                PlayListLibrary.run { live.addMusic(normalMusicUriStubMedia(uri)) }
+                                            }
 
-                            NormalMusicOverflowScreen.AddToPlaylist -> {
-                                Box(Modifier.fillMaxWidth(0.82f).padding(18.dp)) {
-                                    BulkAddToPlaylistBody(
-                                        source = activePlayList,
-                                        onDone = { overflowSheetOpen.value = false },
-                                        onBack = { overflowScreen.value = NormalMusicOverflowScreen.Menu },
-                                    )
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.playlist_picker_added_toast, target.name),
+                                                    Toast.LENGTH_SHORT,
+                                                ).show()
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                        FloatingMenuItemDivider()
+                        FloatingMenuItem(
+                            label = stringResource(R.string.playlist_overflow_play_next),
+                            icon = painterResource(id = R.drawable.ic_action_play_next),
+                        ) {
+                            overflowSheetOpen.value = false
+                            scope.launch(Dispatchers.IO) {
+                                val songsInOrder = activePlayList.songDataList.mapNotNull { uri ->
+                                    yos.music.player.data.libraries.MusicLibrary.songs
+                                        .firstOrNull { it.uri == uri }
+                                }
+                                if (songsInOrder.isEmpty()) return@launch
+
+                                val currentPlaying = MediaController.musicPlaying.value
+                                if (currentPlaying == null) {
+                                    MediaController.prepare(songsInOrder.first(), songsInOrder)
+                                } else {
+                                    MediaController.playNext(songsInOrder)
+                                }
+
+                                withContext(Dispatchers.Main) {
+                                    val msg = if (songsInOrder.size == 1) playNextOneFmt
+                                        else playNextManyFmt.format(songsInOrder.size)
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 }
                             }
+                        }
+                        FloatingMenuDivider()
+                        FloatingMenuItem(
+                            label = stringResource(R.string.playlist_overflow_delete),
+                            icon = painterResource(id = R.drawable.ic_action_delete),
+                            tint = MaterialTheme.colorScheme.error,
+                        ) {
+                            overflowSheetOpen.value = false
+                            val toRestore = activePlayList
+                            val originalIndex = playList.indexOfFirst { it.listID == toRestore.listID }
+                            PlayListLibrary.remove(toRestore)
+                            PendingPlayListDeletion.stash(toRestore, originalIndex)
+                            navController.popBackStack()
                         }
                     }
 
@@ -479,7 +510,8 @@ fun NormalMusic(navController: NavController) {
                             buttonPosition.value = it
                         },
                         onTopBarSecondActionClick = {
-                            overflowScreen.value = NormalMusicOverflowScreen.Menu
+                            sortExpanded.value = false
+                            addToPlaylistExpanded.value = false
                             overflowSheetOpen.value = true
                         },
                         artwork = {
@@ -803,6 +835,18 @@ private fun List<YosMediaItem>.sortForPlaylist(): List<YosMediaItem> {
     return if (PlayListSortPreference.descending) sorted.reversed() else sorted
 }
 
+private fun normalMusicUriStubMedia(uri: android.net.Uri) = YosMediaItem(
+    uri = uri,
+    mediaId = null, mimeType = null,
+    title = null, writer = null, compilation = null, composer = null,
+    artists = null, album = null, albumArtists = null, thumb = null,
+    trackNumber = null, discNumber = null, genre = null,
+    recordingDay = null, recordingMonth = null, recordingYear = null,
+    releaseYear = null, artistId = null, albumId = null, genreId = null,
+    author = null, addDate = null, duration = 0L,
+    modifiedDate = null, cdTrackNumber = null,
+)
+
 @Composable
 private fun NormalTopButton(
     icon: Painter,
@@ -897,7 +941,8 @@ fun FloatingMenu(
             //offset = IntOffset(0, buttonPosition.y.toInt()),
             onDismissRequest = {
                 expandedOnChanged(false)
-            }
+            },
+            properties = PopupProperties(focusable = true),
         ) {
             Box(
                 Modifier
@@ -988,7 +1033,19 @@ fun FloatingMenu(
 
 
 @Composable
-fun FloatingMenuItem(label: String, icon: ImageVector, onClick: () -> Unit) {
+fun FloatingMenuItem(
+    label: String,
+    icon: ImageVector,
+    trailingIcon: ImageVector? = null,
+    trailingIconRotated: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val trailingIconRotation = animateFloatAsState(
+        targetValue = if (trailingIconRotated) { 90f } else { 0f },
+        animationSpec = tween(160),
+        label = "FloatingMenuTrailingIconRotation",
+    )
+
     Row(
         Modifier
             .fillMaxWidth(0.618f)
@@ -1014,11 +1071,35 @@ fun FloatingMenuItem(label: String, icon: ImageVector, onClick: () -> Unit) {
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.onBackground
         )
+        if (trailingIcon != null) {
+            Icon(
+                imageVector = trailingIcon,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = trailingIconRotation.value },
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            )
+        }
     }
 }
 
 @Composable
-fun FloatingMenuItem(label: String, icon: Painter, tint: Color = MaterialTheme.colorScheme.onBackground, onClick: () -> Unit) {
+fun FloatingMenuItem(
+    label: String,
+    icon: Painter,
+    tint: Color = MaterialTheme.colorScheme.onBackground,
+    trailingIcon: ImageVector? = null,
+    trailingIconRotated: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val trailingIconRotation = animateFloatAsState(
+        targetValue = if (trailingIconRotated) { 90f } else { 0f },
+        animationSpec = tween(160),
+        label = "FloatingMenuTrailingIconRotation",
+    )
+
     Row(
         Modifier
             .fillMaxWidth(0.618f)
@@ -1044,6 +1125,321 @@ fun FloatingMenuItem(label: String, icon: Painter, tint: Color = MaterialTheme.c
             modifier = Modifier.size(24.dp),
             tint = tint
         )
+        if (trailingIcon != null) {
+            Icon(
+                imageVector = trailingIcon,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = trailingIconRotation.value },
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+fun <T> FloatingMenuScreenTransition(
+    targetState: T,
+    targetDepth: (T) -> Int = { 0 },
+    content: @Composable (T) -> Unit,
+)
+{
+    AnimatedContent(
+        targetState = targetState,
+        transitionSpec = {
+            val direction = if (targetDepth(targetState) > targetDepth(initialState)) { 1 } else { -1 }
+            (
+                    fadeIn(animationSpec = tween(150)) + slideInHorizontally(animationSpec = tween(180)) { direction * it / 4 } togetherWith
+                            fadeOut(animationSpec = tween(120)) + slideOutHorizontally(animationSpec = tween(160)) { -direction * it / 4 }
+                    ).using(SizeTransform(clip = false))
+        },
+        label = "FloatingMenuScreenTransition",
+    ) { screen ->
+        Column {
+            content(screen)
+        }
+    }
+}
+
+@Composable
+fun FloatingMenuPlayListPickerContent(
+    excludeListId: String?,
+    showHeader: Boolean = true,
+    onBack: () -> Unit,
+    onDone: () -> Unit,
+    onPlaylistSelected: (PlayList) -> Unit,
+)
+{
+    val context = LocalContext.current
+    val createMode = remember { mutableStateOf(false) }
+    val newPlaylistName = remember { mutableStateOf("") }
+    val nameError = remember { mutableStateOf<String?>(null) }
+    val playlists = remember(playList, excludeListId) {
+        playList.filter { it.listID != excludeListId }.sortedBy { it.name }
+    }
+
+    FloatingMenuScreenTransition(
+        targetState = createMode.value,
+        targetDepth = { if (it) { 1 } else { 0 } },
+    ) { creating ->
+        if (creating) {
+            FloatingMenuCreatePlayListContent(
+                name = newPlaylistName.value,
+                errorMessage = nameError.value,
+                onNameChange = {
+                    newPlaylistName.value = it
+                    nameError.value = null
+                },
+                onBack = {
+                    createMode.value = false
+                    newPlaylistName.value = ""
+                    nameError.value = null
+                },
+                onCreate = {
+                    val trimmedName = newPlaylistName.value.trim()
+                    when {
+                        trimmedName.isEmpty() -> Unit
+                        playList.any { it.name == trimmedName } -> {
+                            nameError.value = context.getString(R.string.playlist_picker_duplicate_name)
+                        }
+
+                        else -> {
+                            PlayListLibrary.create(trimmedName)
+                            val created = playList.firstOrNull { it.name == trimmedName }
+                            if (created != null) {
+                                onPlaylistSelected(created)
+                            }
+                            onDone()
+                        }
+                    }
+                },
+            )
+        } else {
+            if (showHeader) {
+                FloatingMenuItem(
+                    label = stringResource(R.string.playlist_picker_title),
+                    icon = painterResource(id = R.drawable.ic_back),
+                    onClick = onBack,
+                )
+                FloatingMenuDivider()
+            }
+            FloatingMenuItem(
+                label = stringResource(R.string.playlist_picker_create_new),
+                icon = painterResource(id = R.drawable.ic_action_add),
+                tint = MaterialTheme.colorScheme.primary,
+            ) {
+                createMode.value = true
+            }
+
+            if (playlists.isEmpty()) {
+                FloatingMenuDivider()
+                FloatingMenuTextItem(label = stringResource(R.string.playlist_picker_empty))
+            } else {
+                FloatingMenuItemDivider()
+                playlists.forEachIndexed { index, playlist ->
+                    FloatingMenuPlaylistItem(playlist = playlist) {
+                        onPlaylistSelected(playlist)
+                        onDone()
+                    }
+                    if (index < playlists.lastIndex) {
+                        FloatingMenuItemDivider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingMenuCreatePlayListContent(
+    name: String,
+    errorMessage: String?,
+    onNameChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onCreate: () -> Unit,
+)
+{
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val canCreate = name.trim().isNotEmpty()
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+
+    FloatingMenuHeader(
+        label = stringResource(R.string.playlist_picker_create_title),
+        onBack = onBack,
+    )
+    FloatingMenuDivider()
+    FloatingMenuTextField(
+        value = name,
+        placeholder = stringResource(R.string.playlist_picker_name_placeholder),
+        focusRequester = focusRequester,
+        onValueChange = onNameChange,
+        onDone = {
+            if (canCreate) { onCreate() }
+        },
+    )
+    if (errorMessage != null) {
+        FloatingMenuTextItem(label = errorMessage, color = MaterialTheme.colorScheme.error)
+    }
+    FloatingMenuDivider()
+    FloatingMenuItem(
+        label = stringResource(R.string.playlist_picker_create_confirm),
+        icon = painterResource(id = R.drawable.ic_action_add),
+        tint = if (canCreate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
+    ) {
+        if (canCreate) { onCreate() }
+    }
+}
+
+@Composable
+private fun FloatingMenuTextField(
+    value: String,
+    placeholder: String,
+    focusRequester: FocusRequester,
+    onValueChange: (String) -> Unit,
+    onDone: () -> Unit,
+)
+{
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    Box(
+        Modifier
+            .fillMaxWidth(0.618f)
+            .heightIn(min = 48.dp)
+            .background((Color.White withNight Color.Black).copy(alpha = 0.68f))
+            .clickable {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (value.isEmpty()) {
+            Text(
+                text = placeholder,
+                fontSize = 17.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.alpha(0.45f),
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            textStyle = TextStyle(
+                color = Color.Black withNight Color.White,
+                fontSize = 17.5.sp,
+            ),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { onDone() }),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .focusRequester(focusRequester)
+                .fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun FloatingMenuTextItem(
+    label: String,
+    color: Color = MaterialTheme.colorScheme.onBackground,
+)
+{
+    Text(
+        text = label,
+        color = color,
+        fontSize = 15.sp,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth(0.618f)
+            .background((Color.White withNight Color.Black).copy(alpha = 0.68f))
+            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .alpha(0.8f),
+    )
+}
+
+@Composable
+private fun FloatingMenuHeader(label: String, onBack: () -> Unit)
+{
+    Row(
+        Modifier
+            .fillMaxWidth(0.618f)
+            .height(48.dp)
+            .background((Color.White withNight Color.Black).copy(alpha = 0.68f))
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_back),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(18.dp)
+                    .alpha(0.6f),
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            fontSize = 17.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.alpha(0.9f),
+        )
+    }
+}
+
+@Composable
+private fun FloatingMenuPlaylistItem(playlist: PlayList, onClick: () -> Unit)
+{
+    val playlistSongs = remember(playlist.songDataList) {
+        playlist.songDataList.mapNotNull { uri -> songs.firstOrNull { it.uri == uri } }
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth(0.618f)
+            .height(48.dp)
+            .background((Color.White withNight Color.Black).copy(alpha = 0.68f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = playlist.name,
+            fontSize = 17.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .alpha(0.9f)
+                .padding(end = 18.dp),
+        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(6.dp)),
+        ) {
+            PlayListAutoCover(songs = playlistSongs)
+        }
     }
 }
 
