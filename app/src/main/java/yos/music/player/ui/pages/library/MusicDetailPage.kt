@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -82,10 +84,12 @@ fun MusicDetailPage(
     topBarFirstActionContentDescription: String? = null,
     topBarFirstActionSelected: Boolean = false,
     onTopBarFirstActionClick: (() -> Unit)? = null,
+    onTopBarFirstActionPositioned: (Offset) -> Unit = {},
     topBarSecondActionIconRes: Int? = null,
     topBarSecondActionContentDescription: String? = null,
     topBarSecondActionSelected: Boolean = false,
     onTopBarSecondActionClick: (() -> Unit)? = null,
+    onTopBarSecondActionPositioned: (Offset) -> Unit = {},
     artwork: @Composable BoxScope.() -> Unit,
     headerContent: @Composable ColumnScope.() -> Unit,
     actionContent: @Composable () -> Unit,
@@ -230,10 +234,12 @@ fun MusicDetailPage(
             topBarFirstActionContentDescription = topBarFirstActionContentDescription,
             topBarFirstActionSelected = topBarFirstActionSelected,
             onTopBarFirstActionClick = onTopBarFirstActionClick,
+            onTopBarFirstActionPositioned = onTopBarFirstActionPositioned,
             topBarSecondActionIconRes = topBarSecondActionIconRes,
             topBarSecondActionContentDescription = topBarSecondActionContentDescription,
             topBarSecondActionSelected = topBarSecondActionSelected,
             onTopBarSecondActionClick = onTopBarSecondActionClick,
+            onTopBarSecondActionPositioned = onTopBarSecondActionPositioned,
         )
     }
 }
@@ -246,11 +252,14 @@ fun MusicDetailCircleButton(
     enabled: Boolean = true,
     accent: Boolean = false,
     selected: Boolean = false,
-    iconSize: androidx.compose.ui.unit.Dp = 22.dp,
+    showBackground: Boolean = true,
+    iconSize: Dp = 22.dp,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val backgroundColor = if (accent) {
+    val backgroundColor = if (!showBackground) {
+        Color.Transparent
+    } else if (accent) {
         Color.White.copy(alpha = 0.14f)
     } else {
         Color.Black.copy(alpha = 0.36f)
@@ -371,10 +380,12 @@ private fun MusicDetailTopBar(
     topBarFirstActionContentDescription: String?,
     topBarFirstActionSelected: Boolean,
     onTopBarFirstActionClick: (() -> Unit)?,
+    onTopBarFirstActionPositioned: (Offset) -> Unit,
     topBarSecondActionIconRes: Int?,
     topBarSecondActionContentDescription: String?,
     topBarSecondActionSelected: Boolean,
     onTopBarSecondActionClick: (() -> Unit)?,
+    onTopBarSecondActionPositioned: (Offset) -> Unit,
 ) {
     val surfaceColor = lerp(
         start = Color.Black.copy(alpha = 0.34f),
@@ -388,6 +399,10 @@ private fun MusicDetailTopBar(
     )
     val firstCustomActionIconRes = topBarFirstActionIconRes
     val secondCustomActionIconRes = topBarSecondActionIconRes
+    val firstCustomActionIsMore = firstCustomActionIconRes == R.drawable.ic_action_more
+    val secondCustomActionIsMore = secondCustomActionIconRes == R.drawable.ic_action_more
+    val firstCustomActionIsFavorite = firstCustomActionIconRes == R.drawable.ic_action_favorite || firstCustomActionIconRes == R.drawable.ic_action_favorited
+    val secondCustomActionIsFavorite = secondCustomActionIconRes == R.drawable.ic_action_favorite || secondCustomActionIconRes == R.drawable.ic_action_favorited
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -424,6 +439,20 @@ private fun MusicDetailTopBar(
                             } else {
                                 iconTint
                             },
+                            iconSize = if (firstCustomActionIsMore) {
+                                32.dp
+                            } else if (firstCustomActionIsFavorite) {
+                                24.dp
+                            } else {
+                                18.dp
+                            },
+                            modifier = if (firstCustomActionIsMore) {
+                                Modifier.onGloballyPositioned {
+                                    onTopBarFirstActionPositioned(it.localToRoot(Offset.Zero))
+                                }
+                            } else {
+                                Modifier
+                            },
                             onClick = onTopBarFirstActionClick ?: {},
                         )
 
@@ -437,9 +466,53 @@ private fun MusicDetailTopBar(
                             } else {
                                 iconTint
                             },
+                            iconSize = if (secondCustomActionIsMore) {
+                                32.dp
+                            } else if (secondCustomActionIsFavorite) {
+                                24.dp
+                            } else {
+                                18.dp
+                            },
+                            modifier = if (secondCustomActionIsMore) {
+                                Modifier.onGloballyPositioned {
+                                    onTopBarSecondActionPositioned(it.localToRoot(Offset.Zero))
+                                }
+                            } else {
+                                Modifier
+                            },
                             onClick = onTopBarSecondActionClick ?: {},
                         )
                     }
+                } else if (firstCustomActionIconRes != null) {
+                    MusicDetailTopBarButton(
+                        painter = painterResource(id = firstCustomActionIconRes),
+                        contentDescription = topBarFirstActionContentDescription,
+                        surfaceColor = if (firstCustomActionIsMore) {
+                            Color.Transparent
+                        } else {
+                            surfaceColor
+                        },
+                        iconTint = if (topBarFirstActionSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            iconTint
+                        },
+                        iconSize = if (firstCustomActionIsMore) {
+                            38.dp
+                        } else if (firstCustomActionIsFavorite) {
+                            28.dp
+                        } else {
+                            18.dp
+                        },
+                        modifier = if (firstCustomActionIsMore) {
+                            Modifier.onGloballyPositioned {
+                                onTopBarFirstActionPositioned(it.localToRoot(Offset.Zero))
+                            }
+                        } else {
+                            Modifier
+                        },
+                        onClick = onTopBarFirstActionClick ?: {},
+                    )
                 } else if (showSortButton && showSearchButton) {
                     MusicDetailTopBarActionPill(
                         surfaceColor = surfaceColor,
@@ -577,6 +650,8 @@ private fun MusicDetailTopBarButton(
     contentDescription: String?,
     surfaceColor: Color,
     iconTint: Color,
+    iconSize: Dp = 18.dp,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -584,6 +659,7 @@ private fun MusicDetailTopBarButton(
     Box(
         modifier = Modifier
             .size(44.dp)
+            .then(modifier)
             .clip(CircleShape)
             .background(surfaceColor)
             .clickable(
@@ -600,7 +676,7 @@ private fun MusicDetailTopBarButton(
             painter = painter,
             contentDescription = contentDescription,
             tint = iconTint,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(iconSize),
         )
     }
 }
@@ -610,6 +686,8 @@ private fun MusicDetailTopBarInlineButton(
     painter: Painter,
     contentDescription: String?,
     iconTint: Color,
+    iconSize: Dp = 18.dp,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -617,6 +695,7 @@ private fun MusicDetailTopBarInlineButton(
     Box(
         modifier = Modifier
             .size(36.dp)
+            .then(modifier)
             .clip(CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -632,7 +711,7 @@ private fun MusicDetailTopBarInlineButton(
             painter = painter,
             contentDescription = contentDescription,
             tint = iconTint,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(iconSize),
         )
     }
 }

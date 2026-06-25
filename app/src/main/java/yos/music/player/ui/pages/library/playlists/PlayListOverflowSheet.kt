@@ -395,7 +395,7 @@ private fun PlayListSortBody(onBack: () -> Unit) {
  * made we'll reuse it" — this completes that reuse for bulk.
  */
 @Composable
-private fun BulkAddToPlaylistBody(
+internal fun BulkAddToPlaylistBody(
     source: PlayList,
     onDone: () -> Unit,
     onBack: () -> Unit,

@@ -14,6 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -94,7 +96,7 @@ import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.pages.library.playlists.PendingPlayListDeletion
 import yos.music.player.ui.pages.library.playlists.PlayListEditModal
-import yos.music.player.ui.pages.library.playlists.PlayListOverflowSheet
+import yos.music.player.ui.pages.library.playlists.BulkAddToPlaylistBody
 import yos.music.player.ui.pages.library.playlists.PlayListSearch
 import yos.music.player.ui.pages.library.playlists.PlayListSortSheet
 import yos.music.player.ui.pages.library.playlists.PlayListSort
@@ -105,7 +107,10 @@ import yos.music.player.ui.widgets.basic.Title
 import yos.music.player.ui.widgets.basic.TitleBarIcon
 import yos.music.player.ui.widgets.basic.YosWrapper
 
+private enum class NormalMusicOverflowScreen { Menu, Sort, AddToPlaylist }
+
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun NormalMusic(navController: NavController) {
     Column(
         Modifier
@@ -241,6 +246,9 @@ fun NormalMusic(navController: NavController) {
             // the new bottom-sheet menu instead of the FloatingMenu
             // (which remains the right surface for Songs / Album / etc.).
             val overflowSheetOpen = remember { mutableStateOf(false) }
+            val overflowScreen = remember(activePlayList?.listID) {
+                mutableStateOf(NormalMusicOverflowScreen.Menu)
+            }
             val editModalOpen = remember { mutableStateOf(false) }
             val sortSheetOpen = remember { mutableStateOf(false) }
             val playListListState = rememberLazyListState()
@@ -272,70 +280,131 @@ fun NormalMusic(navController: NavController) {
                         musicList.sumOf { it.duration } / 60000
                     }
 
-                    PlayListOverflowSheet(
-                        isOpen = overflowSheetOpen,
-                        playList = activePlayList,
-                        onEdit = {
-                            // PRD §5.3: open the Edit Playlist modal.
-                            editModalOpen.value = true
-                        },
-                        onPlayNext = {
-                            // PRD FR-M-09: insert the playlist's
-                            // current songs right after the now-
-                            // playing track. Updates both the
-                            // ExoPlayer queue and the app's
-                            // [MediaController.playingMusicList]
-                            // snapshot so the NowPlaying queue UI
-                            // (which renders from playingMusicList,
-                            // not the live player) reflects the
-                            // insert immediately. Falls back to
-                            // [MediaController.prepare] when nothing
-                            // is currently playing.
-                            scope.launch(Dispatchers.IO) {
-                                // Resolve the playlist's URIs against
-                                // the global song library — musicList
-                                // here is whatever the page is showing
-                                // (which may be filtered by an active
-                                // search query), so we go straight to
-                                // the canonical store.
-                                val songsInOrder = activePlayList.songDataList.mapNotNull { uri ->
-                                    yos.music.player.data.libraries.MusicLibrary.songs
-                                        .firstOrNull { it.uri == uri }
+                    FloatingMenu({ overflowSheetOpen.value }, {
+                        overflowSheetOpen.value = it
+                    }, buttonPosition.value) {
+                        when (overflowScreen.value) {
+                            NormalMusicOverflowScreen.Menu -> {
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_overflow_sort_by),
+                                    icon = painterResource(id = R.drawable.ic_action_sort),
+                                ) {
+                                    overflowScreen.value = NormalMusicOverflowScreen.Sort
                                 }
-                                if (songsInOrder.isEmpty()) return@launch
-
-                                val currentPlaying = MediaController.musicPlaying.value
-
-                                if (currentPlaying == null) {
-                                    // Nothing is playing — start fresh
-                                    // with the playlist as the new queue.
-                                    MediaController.prepare(songsInOrder.first(), songsInOrder)
-                                } else {
-                                    MediaController.playNext(songsInOrder)
+                                FloatingMenuItemDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_overflow_edit),
+                                    icon = painterResource(id = R.drawable.ic_action_edit),
+                                ) {
+                                    overflowSheetOpen.value = false
+                                    editModalOpen.value = true
                                 }
+                                FloatingMenuDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_overflow_add_to),
+                                    icon = painterResource(id = R.drawable.ic_action_add),
+                                ) {
+                                    overflowScreen.value = NormalMusicOverflowScreen.AddToPlaylist
+                                }
+                                FloatingMenuItemDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_overflow_play_next),
+                                    icon = painterResource(id = R.drawable.ic_action_play_next),
+                                ) {
+                                    overflowSheetOpen.value = false
+                                    scope.launch(Dispatchers.IO) {
+                                        val songsInOrder = activePlayList.songDataList.mapNotNull { uri ->
+                                            yos.music.player.data.libraries.MusicLibrary.songs
+                                                .firstOrNull { it.uri == uri }
+                                        }
+                                        if (songsInOrder.isEmpty()) return@launch
 
-                                withContext(Dispatchers.Main) {
-                                    val msg = if (songsInOrder.size == 1) playNextOneFmt
-                                        else playNextManyFmt.format(songsInOrder.size)
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        val currentPlaying = MediaController.musicPlaying.value
+                                        if (currentPlaying == null) {
+                                            MediaController.prepare(songsInOrder.first(), songsInOrder)
+                                        } else {
+                                            MediaController.playNext(songsInOrder)
+                                        }
+
+                                        withContext(Dispatchers.Main) {
+                                            val msg = if (songsInOrder.size == 1) playNextOneFmt
+                                                else playNextManyFmt.format(songsInOrder.size)
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                                FloatingMenuDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_overflow_delete),
+                                    icon = painterResource(id = R.drawable.ic_action_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                ) {
+                                    overflowSheetOpen.value = false
+                                    val toRestore = activePlayList
+                                    val originalIndex = playList.indexOfFirst { it.listID == toRestore.listID }
+                                    PlayListLibrary.remove(toRestore)
+                                    PendingPlayListDeletion.stash(toRestore, originalIndex)
+                                    navController.popBackStack()
                                 }
                             }
-                        },
-                        onDelete = {
-                            // PRD FR-M-10: optimistic delete + undo
-                            // snackbar. Wired with a simple Toast
-                            // here pending the snackbar host (next
-                            // commit). The deletion itself happens
-                            // immediately and the page pops back.
-                            val toRestore = activePlayList
-                            val originalIndex = playList.indexOfFirst { it.listID == toRestore.listID }
-                            PlayListLibrary.remove(toRestore)
-                            // Stash for the upcoming snackbar host;
-                            // for now, we just pop back.
-                            PendingPlayListDeletion.stash(toRestore, originalIndex)
-                            navController.popBackStack()
-                        },
-                    )
+
+                            NormalMusicOverflowScreen.Sort -> {
+                                val accent = MaterialTheme.colorScheme.primary
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_sort_title),
+                                    icon = painterResource(id = R.drawable.ic_back),
+                                ) {
+                                    overflowScreen.value = NormalMusicOverflowScreen.Menu
+                                }
+                                FloatingMenuDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_sort_manual),
+                                    icon = painterResource(id = R.drawable.ic_action_drag_handle),
+                                    tint = if (PlayListSortPreference.sort == PlayListSort.Manual) accent else MaterialTheme.colorScheme.onBackground,
+                                ) { PlayListSortPreference.sort = PlayListSort.Manual }
+                                FloatingMenuItemDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_sort_title_name),
+                                    icon = painterResource(id = R.drawable.ic_action_sort),
+                                    tint = if (PlayListSortPreference.sort == PlayListSort.Title) accent else MaterialTheme.colorScheme.onBackground,
+                                ) { PlayListSortPreference.sort = PlayListSort.Title }
+                                FloatingMenuItemDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_sort_artist),
+                                    icon = painterResource(id = R.drawable.ic_action_sort),
+                                    tint = if (PlayListSortPreference.sort == PlayListSort.Artist) accent else MaterialTheme.colorScheme.onBackground,
+                                ) { PlayListSortPreference.sort = PlayListSort.Artist }
+                                FloatingMenuItemDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_sort_recently_added),
+                                    icon = painterResource(id = R.drawable.ic_action_sort),
+                                    tint = if (PlayListSortPreference.sort == PlayListSort.RecentlyAdded) accent else MaterialTheme.colorScheme.onBackground,
+                                ) { PlayListSortPreference.sort = PlayListSort.RecentlyAdded }
+                                FloatingMenuDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_sort_ascending),
+                                    icon = painterResource(id = R.drawable.ic_action_sort),
+                                    tint = if (!PlayListSortPreference.descending) accent else MaterialTheme.colorScheme.onBackground,
+                                ) { PlayListSortPreference.descending = false }
+                                FloatingMenuItemDivider()
+                                FloatingMenuItem(
+                                    label = stringResource(R.string.playlist_sort_descending),
+                                    icon = painterResource(id = R.drawable.ic_action_sort),
+                                    tint = if (PlayListSortPreference.descending) accent else MaterialTheme.colorScheme.onBackground,
+                                ) { PlayListSortPreference.descending = true }
+                            }
+
+                            NormalMusicOverflowScreen.AddToPlaylist -> {
+                                Box(Modifier.fillMaxWidth(0.82f).padding(18.dp)) {
+                                    BulkAddToPlaylistBody(
+                                        source = activePlayList,
+                                        onDone = { overflowSheetOpen.value = false },
+                                        onBack = { overflowScreen.value = NormalMusicOverflowScreen.Menu },
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     PlayListSortSheet(isOpen = sortSheetOpen)
 
@@ -403,10 +472,14 @@ fun NormalMusic(navController: NavController) {
                         topBarSecondActionIconRes = if (playListSearchModeActive.value) {
                             null
                         } else {
-                            R.drawable.ic_nowplaying_more
+                            R.drawable.ic_action_more
                         },
                         topBarSecondActionContentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+                        onTopBarSecondActionPositioned = {
+                            buttonPosition.value = it
+                        },
                         onTopBarSecondActionClick = {
+                            overflowScreen.value = NormalMusicOverflowScreen.Menu
                             overflowSheetOpen.value = true
                         },
                         artwork = {
@@ -467,6 +540,8 @@ fun NormalMusic(navController: NavController) {
                                     painter = painterResource(id = R.drawable.button_icon_shuffle),
                                     contentDescription = stringResource(id = R.string.normal_button_shuffle),
                                     enabled = list.value.isNotEmpty(),
+                                    showBackground = false,
+                                    iconSize = 36.dp,
                                     onClick = {
                                         if (list.value.isEmpty()) return@MusicDetailCircleButton
 
@@ -484,6 +559,8 @@ fun NormalMusic(navController: NavController) {
                                     painter = painterResource(id = R.drawable.button_icon_play),
                                     contentDescription = stringResource(id = R.string.normal_button_play),
                                     enabled = list.value.isNotEmpty(),
+                                    showBackground = false,
+                                    iconSize = 36.dp,
                                     onClick = {
                                         if (list.value.isEmpty()) return@MusicDetailCircleButton
 
@@ -496,6 +573,8 @@ fun NormalMusic(navController: NavController) {
                                 MusicDetailCircleButton(
                                     painter = painterResource(id = R.drawable.ic_action_search),
                                     contentDescription = stringResource(id = R.string.music_detail_search_cd, activePlayList.name),
+                                    showBackground = false,
+                                    iconSize = 36.dp,
                                     onClick = {
                                         scope.launch {
                                             playListSearchModeActive.value = true
@@ -767,7 +846,43 @@ private fun NormalTopButton(
 fun FloatingMenu(
     expandedLambda: () -> Boolean,
     expandedOnChanged: (Boolean) -> Unit,
-    buttonPosition: Offset = Offset.Zero
+    buttonPosition: Offset = Offset.Zero,
+    content: @Composable ColumnScope.() -> Unit = {
+        FloatingMenuItem(
+            label = stringResource(id = R.string.normal_button_sort_by_name),
+            icon = Icons.AutoMirrored.Outlined.QueueMusic
+        ) {
+            SongSort = SettingsLibrary.SongSortEnum.MUSIC_TITLE.ordinal
+        }
+        FloatingMenuItemDivider()
+        FloatingMenuItem(
+            label = stringResource(id = R.string.normal_button_sort_by_artist),
+            icon = Icons.Outlined.Person
+        ) {
+            SongSort = SettingsLibrary.SongSortEnum.ARTIST_NAME.ordinal
+        }
+        FloatingMenuDivider()
+        FloatingMenuItem(
+            label = stringResource(id = R.string.normal_button_sort_by_date),
+            icon = Icons.Outlined.AccessTime
+        ) {
+            SongSort = SettingsLibrary.SongSortEnum.MODIFIED_DATE.ordinal
+        }
+        FloatingMenuDivider()
+        FloatingMenuItem(
+            label = stringResource(id = R.string.normal_button_sort_ascending),
+            icon = Icons.Rounded.ArrowUpward
+        ) {
+            EnableDescending = false
+        }
+        FloatingMenuItemDivider()
+        FloatingMenuItem(
+            label = stringResource(id = R.string.normal_button_sort_descending),
+            icon = Icons.Rounded.ArrowDownward
+        ) {
+            EnableDescending = true
+        }
+    },
 ) {
 
     val keepPopup = remember("FloatingMenu_keepPopup") {
@@ -847,43 +962,7 @@ fun FloatingMenu(
                                 }
                                 .background(Color(0xF2E9E9E9) withNight Color(0xFA161616), shape),
                         ) {
-                            FloatingMenuItem(
-                                label = stringResource(id = R.string.normal_button_sort_by_name),
-                                icon = Icons.AutoMirrored.Outlined.QueueMusic
-                            ) {
-                                SongSort =
-                                    SettingsLibrary.SongSortEnum.MUSIC_TITLE.ordinal
-                            }
-                            FloatingMenuItemDivider()
-                            FloatingMenuItem(
-                                label = stringResource(id = R.string.normal_button_sort_by_artist),
-                                icon = Icons.Outlined.Person
-                            ) {
-                                SongSort =
-                                    SettingsLibrary.SongSortEnum.ARTIST_NAME.ordinal
-                            }
-                            FloatingMenuDivider()
-                            FloatingMenuItem(
-                                label = stringResource(id = R.string.normal_button_sort_by_date),
-                                icon = Icons.Outlined.AccessTime
-                            ) {
-                                SongSort =
-                                    SettingsLibrary.SongSortEnum.MODIFIED_DATE.ordinal
-                            }
-                            FloatingMenuDivider()
-                            FloatingMenuItem(
-                                label = stringResource(id = R.string.normal_button_sort_ascending),
-                                icon = Icons.Rounded.ArrowUpward
-                            ) {
-                                EnableDescending = false
-                            }
-                            FloatingMenuItemDivider()
-                            FloatingMenuItem(
-                                label = stringResource(id = R.string.normal_button_sort_descending),
-                                icon = Icons.Rounded.ArrowDownward
-                            ) {
-                                EnableDescending = true
-                            }
+                            content()
                         }
                     }
                 }
@@ -934,6 +1013,36 @@ fun FloatingMenuItem(label: String, icon: ImageVector, onClick: () -> Unit) {
             contentDescription = null,
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.onBackground
+        )
+    }
+}
+
+@Composable
+fun FloatingMenuItem(label: String, icon: Painter, tint: Color = MaterialTheme.colorScheme.onBackground, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth(0.618f)
+            .height(48.dp)
+            .background((Color.White withNight Color.Black).copy(alpha = 0.68f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 17.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .alpha(0.9f)
+                .padding(end = 18.dp)
+        )
+        Icon(
+            painter = icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = tint
         )
     }
 }
