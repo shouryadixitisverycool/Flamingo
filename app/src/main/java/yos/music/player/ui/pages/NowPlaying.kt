@@ -1528,21 +1528,15 @@ private fun SmallMusicListItem(
     itemClick: () -> Unit,
 ) {
     val draggedItemBackground by animateColorAsState(
-        targetValue = Color.Transparent,
+        targetValue = if (isDragging) { Color.White.copy(alpha = 0.08f) } else { Color.Transparent },
         label = "QueueDraggedItemBackground",
     )
-    val draggedItemElevation by animateDpAsState(
-        targetValue = if (isDragging) { 10.dp } else { 0.dp },
-        label = "QueueDraggedItemElevation",
-    )
-
     Surface(
         modifier = modifier
             .height(QueueRowHeight)
             .fillMaxWidth(),
         color = draggedItemBackground,
         contentColor = Color.White,
-        shadowElevation = draggedItemElevation,
         shape = QueueDraggingItemShape,
     ) {
         Row(
