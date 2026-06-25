@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -69,19 +70,23 @@ import yos.music.player.data.objects.LibraryObject
 import yos.music.player.ui.UI
 import yos.music.player.ui.consumeNowPlayingNavigationMarker
 import yos.music.player.ui.returnToLibraryFromNowPlaying
+import yos.music.player.ui.pages.library.FloatingMenu
+import yos.music.player.ui.pages.library.FloatingMenuDivider
+import yos.music.player.ui.pages.library.FloatingMenuItem
+import yos.music.player.ui.pages.library.FloatingMenuItemDivider
 import yos.music.player.ui.pages.library.MusicDetailCircleButton
 import yos.music.player.ui.pages.library.MusicDetailPage
 import yos.music.player.ui.pages.library.MusicList
 import yos.music.player.ui.theme.YosRoundedCornerShape
 import yos.music.player.ui.theme.withNight
 import yos.music.player.ui.toUI
-import yos.music.player.ui.widgets.basic.ActionItem
-import yos.music.player.ui.widgets.basic.ActionSheet
 import yos.music.player.ui.widgets.basic.ImageQuality
 import yos.music.player.ui.widgets.basic.ShadowImageWithCache
 import yos.music.player.ui.widgets.basic.Title
 import yos.music.player.ui.widgets.basic.YosBottomSheetDialog
 import yos.music.player.ui.widgets.playlist.PlayListPickerContent
+
+private enum class ArtistOverflowScreen { Menu, AddToPlaylist }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,8 +153,11 @@ fun ArtistInfo(
     val overflowSheetOpen = remember("ArtistInfo_overflowSheetOpen") {
         mutableStateOf(false)
     }
-    val addToPlaylistOpen = remember("ArtistInfo_addToPlaylistOpen") {
-        mutableStateOf(false)
+    val overflowScreen = remember(artistName.value) {
+        mutableStateOf(ArtistOverflowScreen.Menu)
+    }
+    val overflowButtonPosition = remember("ArtistInfo_overflowButtonPosition") {
+        mutableStateOf(Offset.Zero)
     }
     val artistSongs = artistSections.songs
     val isFollowed by remember(artistName.value, SettingsLibrary.FollowedArtists) {
@@ -157,78 +165,62 @@ fun ArtistInfo(
             SettingsLibrary.isArtistFollowed(artistName.value)
         }
     }
+    val openArtistSongsSearch: () -> Unit = {
+        LibraryObject.setTargetArtistName(artistName.value)
+        LibraryObject.setArtistSongsSearchOnOpen(true)
+        navController.toUI(UI.ArtistSongs)
+    }
 
-    ActionSheet(
-        isOpen = overflowSheetOpen,
-        header = {
-            ArtistOverflowHeader(
-                artistName = artistName.value,
-                songs = artistSongs,
-            )
-        },
-        items = listOf(
-            ActionItem(
-                iconRes = R.drawable.ic_action_add,
-                label = stringResource(id = R.string.now_playing_overflow_add_to_playlist),
-                showChevron = false,
-                onClick = {
+    FloatingMenu({ overflowSheetOpen.value }, {
+        overflowSheetOpen.value = it
+    }, overflowButtonPosition.value) {
+        when (overflowScreen.value) {
+            ArtistOverflowScreen.Menu -> {
+                FloatingMenuItem(
+                    label = stringResource(id = R.string.now_playing_overflow_add_to_playlist),
+                    icon = painterResource(id = R.drawable.ic_action_add),
+                ) {
+                    overflowScreen.value = ArtistOverflowScreen.AddToPlaylist
+                }
+                FloatingMenuDivider()
+                FloatingMenuItem(
+                    label = stringResource(id = R.string.playlist_overflow_play_next),
+                    icon = painterResource(id = R.drawable.ic_action_play_next),
+                ) {
                     overflowSheetOpen.value = false
-                    addToPlaylistOpen.value = true
-                },
-            ),
-            ActionItem(
-                iconRes = R.drawable.button_icon_shuffle,
-                label = stringResource(id = R.string.normal_button_shuffle),
-                showChevron = false,
-                enabled = artistSongs.isNotEmpty(),
-                onClick = {
-                    overflowSheetOpen.value = false
-                    if (artistSongs.isNotEmpty()) {
-                        scope.launch(Dispatchers.IO) {
-                            MediaController.prepare(
-                                artistSongs.random(),
-                                artistSongs,
-                                shuffleModeEnabled = true,
-                            )
-                        }
-                    }
-                },
-            ),
-            ActionItem(
-                iconRes = R.drawable.ic_action_play_next,
-                label = stringResource(id = R.string.playlist_overflow_play_next),
-                showChevron = false,
-                enabled = artistSongs.isNotEmpty(),
-                onClick = {
-                    overflowSheetOpen.value = false
-                    if (artistSongs.isNotEmpty()) {
-                        scope.launch(Dispatchers.IO) {
-                            val queued = MediaController.playNext(artistSongs)
-                            if (!queued) { return@launch }
+                    if (artistSongs.isEmpty()) { return@FloatingMenuItem }
 
-                            withContext(Dispatchers.Main) {
-                                val message = if (artistSongs.size == 1) {
-                                    context.getString(R.string.playlist_play_next_toast_one)
-                                } else {
-                                    context.getString(
-                                        R.string.playlist_play_next_toast_other,
-                                        artistSongs.size,
-                                    )
-                                }
-                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    scope.launch(Dispatchers.IO) {
+                        val queued = MediaController.playNext(artistSongs)
+                        if (!queued) { return@launch }
+
+                        withContext(Dispatchers.Main) {
+                            val message = if (artistSongs.size == 1) {
+                                context.getString(R.string.playlist_play_next_toast_one)
+                            } else {
+                                context.getString(
+                                    R.string.playlist_play_next_toast_other,
+                                    artistSongs.size,
+                                )
                             }
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     }
-                },
-            ),
-        ),
-    )
+                }
+            }
 
-    ArtistAddToPlaylistSheet(
-        isOpen = addToPlaylistOpen,
-        artistName = artistName.value,
-        songs = artistSongs,
-    )
+            ArtistOverflowScreen.AddToPlaylist -> {
+                Box(Modifier.fillMaxWidth(0.82f).padding(18.dp)) {
+                    ArtistAddToPlaylistContent(
+                        artistName = artistName.value,
+                        songs = artistSongs,
+                        onDone = { overflowSheetOpen.value = false },
+                        onBack = { overflowScreen.value = ArtistOverflowScreen.Menu },
+                    )
+                }
+            }
+        }
+    }
 
     MusicDetailPage(
         title = artistName.value,
@@ -237,18 +229,39 @@ fun ArtistInfo(
         searchPlaceholder = "",
         enableSearch = false,
         showSortButton = false,
-        showSearchButton = true,
+        showSearchButton = false,
         searchModeActive = false,
         searchRequestFocusSignal = 0,
         onBack = handleBack,
         onSort = {},
         onSearchTextChange = {},
-        onSearchClick = {
-            LibraryObject.setTargetArtistName(artistName.value)
-            LibraryObject.setArtistSongsSearchOnOpen(true)
-            navController.toUI(UI.ArtistSongs)
-        },
+        onSearchClick = openArtistSongsSearch,
         onSearchDismiss = {},
+        topBarFirstActionIconRes = if (isFollowed) {
+            R.drawable.ic_action_favorited
+        } else {
+            R.drawable.ic_action_favorite
+        },
+        topBarFirstActionContentDescription = stringResource(
+            id = if (isFollowed) {
+                R.string.artist_action_unfollow
+            } else {
+                R.string.artist_action_follow
+            },
+        ),
+        topBarFirstActionSelected = isFollowed,
+        onTopBarFirstActionClick = {
+            SettingsLibrary.toggleArtistFollowed(artistName.value)
+        },
+        topBarSecondActionIconRes = R.drawable.ic_action_more,
+        topBarSecondActionContentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
+        onTopBarSecondActionPositioned = {
+            overflowButtonPosition.value = it
+        },
+        onTopBarSecondActionClick = {
+            overflowScreen.value = ArtistOverflowScreen.Menu
+            overflowSheetOpen.value = true
+        },
         artwork = {
             ArtistHeroArtwork(songs = artistSongs)
         },
@@ -271,9 +284,30 @@ fun ArtistInfo(
                 horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
             ) {
                 MusicDetailCircleButton(
+                    painter = painterResource(id = R.drawable.button_icon_shuffle),
+                    contentDescription = stringResource(id = R.string.normal_button_shuffle),
+                    enabled = artistSongs.isNotEmpty(),
+                    showBackground = false,
+                    iconSize = 36.dp,
+                    onClick = {
+                        if (artistSongs.isEmpty()) { return@MusicDetailCircleButton }
+
+                        scope.launch(Dispatchers.IO) {
+                            MediaController.prepare(
+                                artistSongs.random(),
+                                artistSongs,
+                                shuffleModeEnabled = true,
+                            )
+                        }
+                    },
+                )
+
+                MusicDetailCircleButton(
                     painter = painterResource(id = R.drawable.button_icon_play),
                     contentDescription = stringResource(id = R.string.normal_button_play),
                     enabled = artistSongs.isNotEmpty(),
+                    showBackground = false,
+                    iconSize = 36.dp,
                     onClick = {
                         if (artistSongs.isEmpty()) { return@MusicDetailCircleButton }
 
@@ -284,34 +318,11 @@ fun ArtistInfo(
                 )
 
                 MusicDetailCircleButton(
-                    painter = painterResource(
-                        id = if (isFollowed) {
-                            R.drawable.ic_nowplaying_favorited
-                        } else {
-                            R.drawable.ic_nowplaying_favorite
-                        },
-                    ),
-                    contentDescription = stringResource(
-                        id = if (isFollowed) {
-                            R.string.artist_action_unfollow
-                        } else {
-                            R.string.artist_action_follow
-                        },
-                    ),
-                    selected = isFollowed,
-                    iconSize = 26.dp,
-                    onClick = {
-                        SettingsLibrary.toggleArtistFollowed(artistName.value)
-                    },
-                )
-
-                MusicDetailCircleButton(
-                    painter = painterResource(id = R.drawable.ic_nowplaying_more),
-                    contentDescription = stringResource(id = R.string.playlist_overflow_more_cd),
-                    iconSize = 26.dp,
-                    onClick = {
-                        overflowSheetOpen.value = true
-                    },
+                    painter = painterResource(id = R.drawable.ic_action_search),
+                    contentDescription = stringResource(id = R.string.music_detail_search_cd, artistName.value),
+                    showBackground = false,
+                    iconSize = 36.dp,
+                    onClick = openArtistSongsSearch,
                 )
             }
         },
@@ -590,6 +601,23 @@ private fun ArtistAddToPlaylistSheet(
 {
     if (!isOpen.value) return
 
+    YosBottomSheetDialog(onDismissRequest = { isOpen.value = false }) {
+        ArtistAddToPlaylistContent(
+            artistName = artistName,
+            songs = songs,
+            onDone = { isOpen.value = false },
+        )
+    }
+}
+
+@Composable
+private fun ArtistAddToPlaylistContent(
+    artistName: String,
+    songs: List<YosMediaItem>,
+    onDone: () -> Unit,
+    onBack: (() -> Unit)? = null,
+)
+{
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sourceStub = remember(artistName) {
@@ -619,15 +647,14 @@ private fun ArtistAddToPlaylistSheet(
         }
     }
 
-    YosBottomSheetDialog(onDismissRequest = { isOpen.value = false }) {
-        PlayListPickerContent(
-            songToAdd = null,
-            onDone = { isOpen.value = false },
-            bulkAddSource = sourceStub,
-            onBulkAdd = performBulkAdd,
-            onCreated = { created ->
-                performBulkAdd(created)
-            },
-        )
-    }
+    PlayListPickerContent(
+        songToAdd = null,
+        onDone = onDone,
+        onBack = onBack,
+        bulkAddSource = sourceStub,
+        onBulkAdd = performBulkAdd,
+        onCreated = { created ->
+            performBulkAdd(created)
+        },
+    )
 }
