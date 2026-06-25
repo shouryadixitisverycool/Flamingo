@@ -1254,8 +1254,8 @@ private fun QueueSectionHeader(
     ) {
         Text(
             text = title,
-            fontSize = 23.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
             color = Color.White,
             modifier = Modifier.weight(1f),
         )
@@ -1263,7 +1263,7 @@ private fun QueueSectionHeader(
         if (onClear != null) {
             Text(
                 text = stringResource(id = R.string.queue_clear),
-                fontSize = 20.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.64f),
                 modifier = Modifier.clickable(
@@ -1345,13 +1345,14 @@ private fun QueueMusicListItem(
 
                 resetAnimationJob?.cancel()
 
-                val wasPastThreshold = absoluteSwipeOffsetPx >= triggerOffsetPx
+                val wasPastAddThreshold = swipeOffsetPx >= triggerOffsetPx
+                val wasPastDeleteThreshold = swipeOffsetPx <= -triggerOffsetPx
                 swipeOffsetPx = (swipeOffsetPx + delta).coerceIn(minSwipeOffsetPx, maxSwipeOffsetPx)
-                val updatedAbsoluteSwipeOffsetPx = if (swipeOffsetPx < 0f) -swipeOffsetPx else swipeOffsetPx
-                val isPastThreshold = updatedAbsoluteSwipeOffsetPx >= triggerOffsetPx
+                val isPastAddThreshold = swipeOffsetPx >= triggerOffsetPx
+                val isPastDeleteThreshold = swipeOffsetPx <= -triggerOffsetPx
 
-                if (wasPastThreshold != isPastThreshold) {
-                    if (isPastThreshold) {
+                if (wasPastAddThreshold != isPastAddThreshold || wasPastDeleteThreshold != isPastDeleteThreshold) {
+                    if (isPastAddThreshold || isPastDeleteThreshold) {
                         Vibrator.longClick(context)
                     } else {
                         Vibrator.click(context)
