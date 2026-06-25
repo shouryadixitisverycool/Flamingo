@@ -7,13 +7,13 @@ Flamingo is a local music player for Android, styled after Apple Music, and is c
 
 <table width="100%">
   <tr>
-    <td align="center"><img src="./docs/pics/1.jpg" width="100%" alt="1"></td>
-    <td align="center"><img src="./docs/pics/2.jpg" width="100%" alt="2"></td>
-    <td align="center"><img src="./docs/pics/3.jpg" width="100%" alt="3"></td>
+    <td align="center"><img src="./docs/pics/1.png" width="100%" alt="1"></td>
+    <td align="center"><img src="./docs/pics/2.png" width="100%" alt="2"></td>
+    <td align="center"><img src="./docs/pics/3.png" width="100%" alt="3"></td>
   </tr>
   <tr>
-    <td align="center"><img src="./docs/pics/4.jpg" width="100%" alt="4"></td>
-    <td align="center"><img src="./docs/pics/5.jpg" width="100%" alt="5"></td>
+    <td align="center"><img src="./docs/pics/4.png" width="100%" alt="4"></td>
+    <td align="center"><img src="./docs/pics/5.png" width="100%" alt="5"></td>
     <td align="center"><img src="./docs/pics/6.jpg" width="100%" alt="6"></td>
   </tr>
 </table>
@@ -25,12 +25,12 @@ Flamingo is a local music player for Android, styled after Apple Music, and is c
 - Minimum support for Android 5.0
 
 ### Package Information
-- Compact size, less than 9 MB
+- Compact size, approx. 10 MB
 - Fully local, no internet required; only necessary permissions are requested
 
 ### Feature Information
 - High UI fidelity with elegant animations
-- Supports basic playback functions (playlist functionality is currently incomplete)
+- Supports playlists, albums, artists 
 - Supports embedded / external TTML and LRC lyrics
 - Supports widgets
 - Excellent lyric animations and effects
