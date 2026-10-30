@@ -13,10 +13,11 @@ import java.util.UUID
  * Edit Playlist modal (description, custom cover) and the Library list
  * (pin state + manual order within the pinned block).
  *
- * Duplicates: [songDataList] already permits duplicate URIs at the data
- * layer; the picker used to enforce uniqueness at insert time but no
- * longer does (PRD FR-E-13). Edit-time row identity is by list index —
- * no schema change required.
+ * Duplicates: [songDataList] permits duplicate URIs at the data layer
+ * (PRD FR-E-13). The add-to-playlist UIs dedupe at insert time through
+ * [PlayListLibrary.addMusicIfAbsent] (issue #17). Edit-time row
+ * identity is by list index, so lists with existing duplicates still
+ * edit correctly.
  *
  * Backward compatibility: all new fields default to `null`/`false` so
  * Gson can deserialize JSON written by prior versions without migration.
@@ -75,6 +76,18 @@ object PlayListLibrary {
         // that want dedupe must check before invoking.
         val uri = music.uri ?: return
         replace(this, copy(songDataList = songDataList + uri))
+    }
+
+    /**
+     * Caller-side dedupe for FR-E-13: adds [music] only when its URI
+     * isn't already in the playlist. Returns true if a row was added.
+     * Every add-to-playlist UI goes through this (issue #17).
+     */
+    fun PlayList.addMusicIfAbsent(music: YosMediaItem): Boolean {
+        val uri = music.uri ?: return false
+        if (uri in songDataList) return false
+        addMusic(music)
+        return true
     }
 
     /**

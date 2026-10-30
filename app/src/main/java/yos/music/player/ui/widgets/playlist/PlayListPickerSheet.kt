@@ -62,6 +62,7 @@ import yos.music.player.code.utils.others.Vibrator
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.PlayListLibrary
 import yos.music.player.data.libraries.PlayListLibrary.addMusic
+import yos.music.player.data.libraries.PlayListLibrary.addMusicIfAbsent
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.ui.theme.withNight
@@ -321,11 +322,15 @@ fun PlayListPickerContent(
                     if (bulkMode) {
                         onBulkAdd?.invoke(playlist)
                     } else if (songToAdd != null) {
-                        playlist.addMusic(songToAdd)
+                        val added = playlist.addMusicIfAbsent(songToAdd)
                         Toast.makeText(
                             context,
                             context.getString(
-                                R.string.playlist_picker_added_toast,
+                                if (added) {
+                                    R.string.playlist_picker_added_toast
+                                } else {
+                                    R.string.playlist_picker_already_in_toast
+                                },
                                 playlist.name,
                             ),
                             Toast.LENGTH_SHORT,

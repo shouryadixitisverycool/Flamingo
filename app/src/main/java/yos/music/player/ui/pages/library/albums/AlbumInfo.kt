@@ -62,7 +62,7 @@ import yos.music.player.data.libraries.FavPlayListLibrary
 import yos.music.player.data.libraries.MusicLibrary
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.PlayListLibrary
-import yos.music.player.data.libraries.PlayListLibrary.addMusic
+import yos.music.player.data.libraries.PlayListLibrary.addMusicIfAbsent
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.libraries.artistsList
@@ -701,18 +701,22 @@ private fun AlbumAddToPlaylistContent(
 
     val performBulkAdd: (PlayList) -> Unit = { target ->
         scope.launch(Dispatchers.IO) {
+            var addedCount = 0
             songs.forEach { song ->
                 val songUri = song.uri ?: return@forEach
                 val live = playList.firstOrNull { it.listID == target.listID } ?: return@forEach
                 PlayListLibrary.run {
-                    live.addMusic(uriStubMedia(songUri))
+                    if (live.addMusicIfAbsent(uriStubMedia(songUri))) addedCount++
                 }
             }
 
             withContext(Dispatchers.Main) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.playlist_picker_added_toast, target.name),
+                    context.getString(
+                        if (addedCount > 0) R.string.playlist_picker_added_toast else R.string.playlist_picker_already_in_toast,
+                        target.name,
+                    ),
                     Toast.LENGTH_SHORT,
                 ).show()
             }
