@@ -409,6 +409,7 @@ internal fun BulkAddToPlaylistBody(
     val performBulkAdd: (PlayList) -> Unit = { target ->
         val urisToAdd = source.songDataList
         MainScope().launch(Dispatchers.IO) {
+            var addedCount = 0
             urisToAdd.forEach { uri ->
                 // Re-read the live record on every iteration so the
                 // copy + replace cycle inside addMusic doesn't
@@ -418,12 +419,15 @@ internal fun BulkAddToPlaylistBody(
                 val live = playList.firstOrNull { it.listID == target.listID }
                     ?: return@forEach
                 val stub = uriStubMedia(uri)
-                PlayListLibrary.run { live.addMusic(stub) }
+                if (PlayListLibrary.run { live.addMusicIfAbsent(stub) }) addedCount++
             }
             withContext(Dispatchers.Main) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.playlist_picker_added_toast, target.name),
+                    context.getString(
+                        if (addedCount > 0) R.string.playlist_picker_added_toast else R.string.playlist_picker_already_in_toast,
+                        target.name,
+                    ),
                     Toast.LENGTH_SHORT,
                 ).show()
             }

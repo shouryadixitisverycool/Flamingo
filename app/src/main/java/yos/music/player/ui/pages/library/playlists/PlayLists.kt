@@ -99,7 +99,7 @@ import yos.music.player.data.libraries.FavPlayListLibrary
 import yos.music.player.data.libraries.MusicLibrary.songs
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.PlayListLibrary
-import yos.music.player.data.libraries.PlayListLibrary.addMusic
+import yos.music.player.data.libraries.PlayListLibrary.addMusicIfAbsent
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.YosMediaItem
 import yos.music.player.data.objects.LibraryObject
@@ -223,15 +223,19 @@ fun PlayLists(navController: NavController) {
             } else null,
             onBulkAddToPlaylist = { source, target ->
                 scope.launch(Dispatchers.IO) {
+                    var addedCount = 0
                     source.songDataList.forEach { uri ->
                         val live = playList.firstOrNull { it.listID == target.listID }
                             ?: return@forEach
-                        live.addMusic(uriStubMedia(uri))
+                        if (live.addMusicIfAbsent(uriStubMedia(uri))) addedCount++
                     }
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.playlist_picker_added_toast, target.name),
+                            context.getString(
+                                if (addedCount > 0) R.string.playlist_picker_added_toast else R.string.playlist_picker_already_in_toast,
+                                target.name,
+                            ),
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
@@ -245,7 +249,7 @@ fun PlayLists(navController: NavController) {
                     source.songDataList.forEach { uri ->
                         val live = playList.firstOrNull { it.listID == created.listID }
                             ?: return@forEach
-                        live.addMusic(uriStubMedia(uri))
+                        live.addMusicIfAbsent(uriStubMedia(uri))
                     }
                     withContext(Dispatchers.Main) {
                         Toast.makeText(

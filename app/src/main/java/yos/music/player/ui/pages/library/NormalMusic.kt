@@ -99,7 +99,7 @@ import yos.music.player.data.libraries.MusicLibrary.songs
 import yos.music.player.data.libraries.MusicLibrary.toMediaItem
 import yos.music.player.data.libraries.PlayList
 import yos.music.player.data.libraries.PlayListLibrary
-import yos.music.player.data.libraries.PlayListLibrary.addMusic
+import yos.music.player.data.libraries.PlayListLibrary.addMusicIfAbsent
 import yos.music.player.data.libraries.PlayListLibrary.pin
 import yos.music.player.data.libraries.PlayListLibrary.playList
 import yos.music.player.data.libraries.PlayListLibrary.unpin
@@ -378,16 +378,20 @@ fun NormalMusic(navController: NavController) {
                                     onDone = { overflowSheetOpen.value = false },
                                     onPlaylistSelected = { target ->
                                         scope.launch(Dispatchers.IO) {
+                                            var addedCount = 0
                                             activePlayList.songDataList.forEach { uri ->
                                                 val live = playList.firstOrNull { it.listID == target.listID }
                                                     ?: return@forEach
-                                                PlayListLibrary.run { live.addMusic(normalMusicUriStubMedia(uri)) }
+                                                if (PlayListLibrary.run { live.addMusicIfAbsent(normalMusicUriStubMedia(uri)) }) addedCount++
                                             }
 
                                             withContext(Dispatchers.Main) {
                                                 Toast.makeText(
                                                     context,
-                                                    context.getString(R.string.playlist_picker_added_toast, target.name),
+                                                    context.getString(
+                                                        if (addedCount > 0) R.string.playlist_picker_added_toast else R.string.playlist_picker_already_in_toast,
+                                                        target.name,
+                                                    ),
                                                     Toast.LENGTH_SHORT,
                                                 ).show()
                                             }
