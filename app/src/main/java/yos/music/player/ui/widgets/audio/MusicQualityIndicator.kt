@@ -136,7 +136,7 @@ fun MusicQualityIndicator() {
                                 YosWrapper {
 
                                     val text =
-                                        if (isHiRes.value) "Hi-Res" else stringResource(id = R.string.music_quality_lossless)
+                                        if (isHiRes.value) stringResource(id = R.string.music_quality_hi_res) else stringResource(id = R.string.music_quality_lossless)
 
                                     AnimatedContent(targetState = text) { thisText ->
                                         Text(

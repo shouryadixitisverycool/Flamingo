@@ -15,7 +15,8 @@
     <string name="tip_scanning">ライブラリから曲を取得中…</string>
     <string name="tip_no_song">再生項目がありません。</string>
     <string name="permission_grant_desc">デバイス上のメディアファイルを読み取るために使用します。</string>
-    <string name="music_quality_lossless">無損失</string>
+    <string name="music_quality_lossless">ロスレス</string>
+    <string name="music_quality_hi_res">ハイレゾロスレス</string>
     <string name="settings_library_refresh_everytime">起動時に毎回更新</string>
     <string name="settings_library_refresh_now">メディアライブラリを更新</string>
     <string name="settings_library_refresh_now_desc">すぐにメディアライブラリを更新します。</string>

@@ -17,6 +17,7 @@
     <string name="tip_no_song">No items to play.</string>
     <string name="permission_grant_desc">Used to read media files on the device.</string>
     <string name="music_quality_lossless">Lossless</string>
+    <string name="music_quality_hi_res">Hi-Res</string>
     <string name="settings_library_refresh_everytime">Refresh every time at startup</string>
     <string name="settings_library_refresh_now">Refresh Media Library</string>
     <string name="settings_library_refresh_now_desc">Refresh the media library immediately.</string>
